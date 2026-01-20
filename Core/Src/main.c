@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "user_main.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,10 +32,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define num_PWM_channels 10
-TIM_HandleTypeDef* Timer_map[num_PWM_channels];
-unsigned int PWM_Channelmap[num_PWM_channels]={TIM_CHANNEL_1,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_3,TIM_CHANNEL_4,TIM_CHANNEL_3,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_1,TIM_CHANNEL_2};
-
+/* moved to user_main.h */
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -71,7 +69,7 @@ static void MX_TIM16_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt);
+/* moved to user_main.h */
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -117,73 +115,14 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  Timer_map[0]=&htim2;
-  Timer_map[1]=&htim2;
-  Timer_map[2]=&htim16;
-  Timer_map[3]=&htim2;
-  Timer_map[4]=&htim3;
-  Timer_map[5]=&htim3;
-  Timer_map[6]=&htim3;
-  Timer_map[7]=&htim3;
-  Timer_map[8]=&htim1;
-  Timer_map[9]=&htim1;
-// htim16.Instance->BDTR |= TIM_BDTR_MOE | TIM_BDTR_AOE; // Force output enable
-
-//  htim16.Instance->CR2 &= ~TIM_CR2_CCPC;  // Disable Commutation Preload so outputs enable immediately
-//  htim16.Instance->CCER |= TIM_CCER_CC1E; // Ensure channel is enabled
-//  htim16.Instance->BDTR |= TIM_BDTR_AOE;  
-//  htim16.Instance->EGR |= TIM_EGR_UG; // Force a manual Update Event to apply all settings 
-//  HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1);
-  for (unsigned int i=0; i<num_PWM_channels; i++){ 
-    HAL_TIM_PWM_Start(Timer_map[i], PWM_Channelmap[i]);
-  }
-//  HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1);
-//  user_pwm_setvalue((uint8_t) 2, (uint16_t) 1500);
-
-
-
-
-//  __HAL_TIM_MOE_ENABLE(&htim16);
+  user_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t last_millis=0,actual_millis=0,last_250millis=0;
-  char MSG[40] = {'\0'};
-  int8_t i=0; 
-  uint8_t up=1;
-  uint16_t loop=0;
   while (1)
   {
-    actual_millis=HAL_GetTick();
-    if (actual_millis-last_250millis>100){
-      last_250millis=actual_millis;
-      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14 );
-      sprintf(MSG, "%7d : PWM = %4d ms\r\n",loop, i*4);
-      HAL_UART_Transmit(&huart2, (const uint8_t *)MSG, sizeof(MSG), 100);
-      loop++;
-    }
- //   HAL_Delay (9);
-    if(actual_millis-last_millis>0) {
-      int count= __HAL_TIM_GET_COUNTER(&htim2);
-      if ((count>2250) && (count <19950)) { // synchronize to PWM Timer Timer2
-        last_millis=actual_millis;
-        for (uint8_t channel=0;channel<num_PWM_channels;channel++){
-          uint16_t PWM_value=1500+((int16_t)i*4);
-          user_pwm_setvalue(channel, PWM_value);
-//          sprintf(MSG, "%7d : PWM = %4d ms\r\n",channel, PWM_value);
-//          HAL_UART_Transmit(&huart2, (const uint8_t *)MSG, sizeof(MSG), 100);
-        }
-        if (up==1){
-          i++;
-          if (i==127) up=0;
-        }
-        else {
-          i--;
-          if (i==-127) up=1;
-        }
-      }
-    }
+    user_loop_step();
 #ifdef USER_LOOP
 #endif
     /* USER CODE END WHILE */
@@ -755,28 +694,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-/** 
-  @brief set the PWM pulse length this function should not e called during active pulse time 
-  @param pwm_channel = index for Timermap PWM_Channelmap; PWM_pulse_length in uS
-  @retval 
-  
-*/
-void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
-{
-  TIM_OC_InitTypeDef sConfigOC={0};                     // important inititialize sConfigOC!!
-  
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-//    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;       // = 0
-//    sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;     // = 0
-//    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;        // = 0
-//    sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;    // = 0
-//    sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;  // = 0
-
-  if (PWM_pulse_lengt <750) PWM_pulse_lengt =750;
-  if (PWM_pulse_lengt >2250) PWM_pulse_lengt =2250;
-  sConfigOC.Pulse = PWM_pulse_lengt;
-  HAL_TIM_PWM_ConfigChannel(Timer_map[pwm_channel], &sConfigOC, PWM_Channelmap[pwm_channel]);
-}
+/* user functions moved to Core/Src/user_main.cpp */
 /* USER CODE END 4 */
 
 /**
