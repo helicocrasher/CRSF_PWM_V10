@@ -1,8 +1,12 @@
 #include "user_main.h"
 #include <stdio.h>
+//#include "../AlfredoCRSF/src/AlfredoCRSF.h"
+#include "../../AlfredoCRSF/src/AlfredoCRSF.h"
+#include "platform_abstraction.h"
 
 TIM_HandleTypeDef* Timer_map[num_PWM_channels];
 unsigned int PWM_Channelmap[num_PWM_channels]={TIM_CHANNEL_1,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_3,TIM_CHANNEL_4,TIM_CHANNEL_3,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_1,TIM_CHANNEL_2};
+
 
 extern "C" {
 
@@ -22,6 +26,8 @@ void user_init(void)
   for (unsigned int i=0; i<num_PWM_channels; i++){
     HAL_TIM_PWM_Start(Timer_map[i], PWM_Channelmap[i]);
   }
+
+
 }
 
 void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
@@ -33,6 +39,8 @@ void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
   if (PWM_pulse_lengt >2250) PWM_pulse_lengt =2250;
   sConfigOC.Pulse = PWM_pulse_lengt;
   HAL_TIM_PWM_ConfigChannel(Timer_map[pwm_channel], &sConfigOC, PWM_Channelmap[pwm_channel]);
+
+
 }
 
 void user_loop_step(void)

@@ -22,6 +22,8 @@
 #include "stm32g0xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "platform_abstraction.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -141,5 +143,13 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
+
+// HAL UART RX Complete Callback for platform abstraction
+// Add this callback when you initialize a UART for AlfredoCRSF
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  (void)huart; // Unused parameter
+  stm32stream_rearm_rx_irq();
+}
 
 /* USER CODE END 1 */

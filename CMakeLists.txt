@@ -58,6 +58,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/user_main.cpp
+    Core/Src/platform_abstraction.cpp
+    ./AlfredoCRSF/src/AlfredoCRSF.cpp
+    ./AlfredoCRSF/src/crc8.cpp
 )
 
 # Add include paths
