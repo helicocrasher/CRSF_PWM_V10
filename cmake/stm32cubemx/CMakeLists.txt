@@ -25,8 +25,6 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/sysmem.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/syscalls.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../startup_stm32g031xx.s
-# User generated application sources can be added here    
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/user_main.cpp
 )
 
 # STM32 HAL/LL Drivers
