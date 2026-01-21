@@ -12,7 +12,7 @@ extern "C" {
 
 
 
-STM32Stream crsfSerial(&huart1);  // Use your UART handle
+STM32Stream* crsfSerial = nullptr;  // Will be initialized in user_init()
 AlfredoCRSF crsf;
 volatile uint8_t ready_RX_UART2 = 1;
 volatile uint8_t ready_TX_UART2 = 1;
@@ -22,7 +22,7 @@ volatile uint8_t ready_TX_UART1 = 1;
 
 // In your initialization (e.g., user_init()):
 inline void init_crsf() {
-    crsf.begin(&crsfSerial);
+  crsf.begin(crsfSerial);
     // Now crsf can be used normally
 }
 
@@ -43,7 +43,9 @@ void user_init(void)
     HAL_TIM_PWM_Start(Timer_map[i], PWM_Channelmap[i]);
   }
 
-  init_crsf();
+  // Ensure UART is initialized before creating STM32Stream
+  crsfSerial = new STM32Stream(&huart1);
+  crsf.begin(crsfSerial);
 }
 
 void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
@@ -65,7 +67,7 @@ void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
 void user_loop_step(void)
 {
   static uint32_t last_millis=0, last_250millis=0;
-  static char MSG[StringBufferSize] = {'\0'};
+//  static char MSG[StringBufferSize] = {'\0'};
   static char debugMSG[UART2_TX_Buffersize] = {'\0'};
   static int8_t i=0;
   static uint8_t up=1;
