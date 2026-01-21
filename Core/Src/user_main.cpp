@@ -10,6 +10,22 @@ unsigned int PWM_Channelmap[num_PWM_channels]={TIM_CHANNEL_1,TIM_CHANNEL_2,TIM_C
 
 extern "C" {
 
+
+
+STM32Stream crsfSerial(&huart1);  // Use your UART handle
+AlfredoCRSF crsf;
+volatile uint8_t ready_RX_UART2 = 1;
+volatile uint8_t ready_TX_UART2 = 1;
+volatile uint8_t ready_RX_UART1 = 1;
+volatile uint8_t ready_TX_UART1 = 1;
+
+
+// In your initialization (e.g., user_init()):
+inline void init_crsf() {
+    crsf.begin(&crsfSerial);
+    // Now crsf can be used normally
+}
+
 void user_init(void)
 {
   Timer_map[0]=&htim2;
@@ -27,7 +43,7 @@ void user_init(void)
     HAL_TIM_PWM_Start(Timer_map[i], PWM_Channelmap[i]);
   }
 
-
+  init_crsf();
 }
 
 void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
@@ -43,22 +59,37 @@ void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
 
 }
 
+#define StringBufferSize 60
+#define UART2_TX_Buffersize 100
+
 void user_loop_step(void)
 {
   static uint32_t last_millis=0, last_250millis=0;
-  static char MSG[40] = {'\0'};
+  static char MSG[StringBufferSize] = {'\0'};
+  static char debugMSG[UART2_TX_Buffersize] = {'\0'};
   static int8_t i=0;
   static uint8_t up=1;
   static uint16_t loop=0;
+  static uint16_t ch1=0, ch2=0;
 
   uint32_t actual_millis = HAL_GetTick();
+  crsf.update();
+  if (crsf.isLinkUp()) {
+    ch1 = crsf.getChannel(1);  // Get channel 1 in microseconds
+    ch2 = crsf.getChannel(2);
+  }
+  else {ch1 =999; ch2=999;}
+  
   if (actual_millis - last_250millis > 100){
     last_250millis = actual_millis;
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14 );
-    sprintf(MSG, "%7d : PWM = %4d ms\r\n", loop, i*4);
-    HAL_UART_Transmit(&huart2, (const uint8_t *)MSG, sizeof(MSG), 100);
+    snprintf(debugMSG, StringBufferSize, "%7d : PWM = %4d ms / CH1 = %4d CH2 =  %4d\r\n", loop, i*4, ch1, ch2);
+    send_UART2(debugMSG);
+    //HAL_UART_Transmit(&huart2, (const uint8_t *)MSG, sizeof(MSG), 100);
     loop++;
   }
+
+//  HAL_UART
 
   if(actual_millis - last_millis > 0) {
     int count = __HAL_TIM_GET_COUNTER(&htim2);
@@ -80,4 +111,38 @@ void user_loop_step(void)
   }
 }
 
+
+int8_t send_UART2(char* msg) {   
+    if (ready_TX_UART2==1) {
+        ready_TX_UART2 = 0; 
+        uint8_t msg_len = strlen(msg);
+        if (msg_len > UART2_TX_Buffersize) {
+            msg_len = UART2_TX_Buffersize; // Limit the message length to prevent overflow
+        }
+        HAL_UART_Transmit_IT(&huart2, (uint8_t*)msg, msg_len);
+        return 0;
+    }
+    else {
+      return -1;
+   }
+}
+
+void user_HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+     if (huart->Instance == USART2) {
+      ready_RX_UART2 = 1;
+    } 
+    if (huart->Instance == USART1) {
+      ready_RX_UART1 = 1; 
+    }
+}
+
+void user_HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+
+    if (huart->Instance == USART2) {
+    ready_TX_UART2 = 1;
+  } 
+  if (huart->Instance == USART1) {
+    ready_TX_UART1 = 1; 
+  }
+}
 } // extern "C"

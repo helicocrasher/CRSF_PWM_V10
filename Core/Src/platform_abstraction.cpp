@@ -8,6 +8,17 @@
 // Global pointer for HAL callback
 STM32Stream* g_uartStream = nullptr;
 
+extern UART_HandleTypeDef huart1;
+/*
+extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart == &huart1 && g_uartStream) {
+        // Pass received byte to STM32Stream
+        g_uartStream->onRxByte(g_uartStream->_rxBuf[g_uartStream->_head]);
+        // Re-arm RX interrupt for next byte
+        HAL_UART_Receive_IT(huart, &g_uartStream->_rxBuf[g_uartStream->_head], 1);
+    }
+}
+*/
 extern "C" void stm32stream_rearm_rx_irq(void) {
     if (g_uartStream) {
         // Re-enable interrupt for next byte (safe for C)
