@@ -92,6 +92,8 @@ void HardFault_Handler(void)
   while (1)
   {
     /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+int tmp = 1;
+tmp++;  
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
 }
@@ -172,13 +174,5 @@ void USART2_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
-/*
-// HAL UART RX Complete Callback for platform abstraction
-// Add this callback when you initialize a UART for AlfredoCRSF
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-  (void)huart; // Unused parameter
-  stm32stream_rearm_rx_irq();
-}
-*/
+
 /* USER CODE END 1 */

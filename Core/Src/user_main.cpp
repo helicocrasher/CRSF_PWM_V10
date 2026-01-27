@@ -4,12 +4,14 @@
 #include "../../AlfredoCRSF/src/AlfredoCRSF.h"
 #include "platform_abstraction.h"
 
+#define CRSF_BATTERY_SENSOR_CELLS_MAX 12
+
 TIM_HandleTypeDef* Timer_map[num_PWM_channels];
 unsigned int PWM_Channelmap[num_PWM_channels]={TIM_CHANNEL_1,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_3,TIM_CHANNEL_4,TIM_CHANNEL_3,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_1,TIM_CHANNEL_2};
 
 
 extern "C" {
-
+static void sendCellVoltage(uint8_t cellId, float voltage);
 
 
 STM32Stream* crsfSerial = nullptr;  // Will be initialized in user_init()
@@ -18,7 +20,7 @@ volatile uint8_t ready_RX_UART2 = 1;
 volatile uint8_t ready_TX_UART2 = 1;
 volatile uint8_t ready_RX_UART1 = 1;
 volatile uint8_t ready_TX_UART1 = 1;
-volatile uint32_t RX1_overrun = 0;
+volatile uint32_t RX1_overrun = 0, ELRS_TX_count = 0;
 
 
 // In your initialization (e.g., user_init()):
@@ -99,6 +101,7 @@ void user_loop_step(void)
     snprintf(debugMSG, StringBufferSize, "%7d : PWM = %4d ms / CH1 = %4d CH2 =  %4d\r\n", loop, i*4, ch1, ch2);
     send_UART2(debugMSG);
     //HAL_UART_Transmit(&huart2, (const uint8_t *)MSG, sizeof(MSG), 100);
+    sendCellVoltage(1, (float) 4.111);
     loop++;
   }
 
@@ -151,4 +154,15 @@ void user_HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
     ready_TX_UART1 = 1; 
   }
 }
+
+static void sendCellVoltage(uint8_t cellId, float voltage) {
+  if (cellId < 1 || cellId > CRSF_BATTERY_SENSOR_CELLS_MAX)     return;
+
+  uint8_t payload[3];
+  payload[0] = cellId;
+  uint16_t voltage_be = htobe16((uint16_t)(voltage * 1000.0)); //mV
+  memcpy(&payload[1], &voltage_be, sizeof(voltage_be));
+  crsf.queuePacket(CRSF_SYNC_BYTE, 0x0e, payload, sizeof(payload));
+}
+
 } // extern "C"

@@ -4,12 +4,29 @@
  */
 
 #include "platform_abstraction.h"
+#include <cstdint>
+#include <cstring>
 
 // Global pointer for HAL callback
 STM32Stream* g_uartStream = nullptr;
 
 extern UART_HandleTypeDef huart1;
-extern volatile uint32_t RX1_overrun;
+extern volatile uint32_t RX1_overrun, ELRS_TX_count;
+extern volatile uint8_t ready_RX_UART1;
+extern volatile uint8_t ready_TX_UART1;
+extern volatile uint8_t ready_TX_UART2; 
+extern volatile uint8_t ready_RX_UART2; 
+
+char UART1_TX_Buffer[100];
+
+extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART2) {
+    ready_TX_UART2 = 1;
+  } 
+  if (huart->Instance == USART1) {
+    ready_TX_UART1 = 1; 
+  }
+}
 
 extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart == &huart1 && g_uartStream) {
@@ -63,13 +80,32 @@ int STM32Stream::read() {
 }
 
 size_t STM32Stream::write(uint8_t b) {
-//    HAL_UART_Transmit(_huart, &b, 1, 100);
-    return 1;
+//    HAL_UART_Transmit(_huart, &b, 1, 100); // Blocking version
+    if (ready_TX_UART1==  1 ) { // Non-blocking version - not tested
+      ELRS_TX_count+=1;  
+      memcpy(&UART1_TX_Buffer[0], &b, 1);
+      HAL_UART_Transmit_IT(_huart, (uint8_t*)UART1_TX_Buffer, 1); 
+      ready_TX_UART1 = 0;
+      return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 size_t STM32Stream::write(const uint8_t *buf, size_t len) {
- //   HAL_UART_Transmit(_huart, (uint8_t*)buf, len, 100);
-    return len;
+
+//    HAL_UART_Transmit(_huart, (uint8_t*)buf, len, 100); // Blocking version - does work but blocking
+    if (ready_TX_UART1==  1 ) { // Non-blocking version - does work
+      ELRS_TX_count+=len;  
+      memcpy(&UART1_TX_Buffer[0], buf, len);
+      HAL_UART_Transmit_IT(_huart, (uint8_t*)UART1_TX_Buffer, len); 
+      ready_TX_UART1 = 0;
+      return len;
+    }
+    else {
+        return 0;
+    }
 }
 
 void STM32Stream::onRxByte(uint8_t byte) {

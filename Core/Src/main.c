@@ -697,15 +697,6 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-/* user functions moved to Core/Src/user_main.cpp */
-/*void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
-  user_HAL_UART_RxCpltCallback(huart);
-}
-*/
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart){
-  user_HAL_UART_TxCpltCallback(huart);
-}
-
 /* USER CODE END 4 */
 
 /**
