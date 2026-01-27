@@ -69,11 +69,11 @@ void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
 
 void user_loop_step(void)
 {
-  static uint32_t last_millis=0, last_250millis=0, servo_update_millis=0;
+  static uint32_t  last_250millis=0, servo_update_millis=0;
 //  static char MSG[StringBufferSize] = {'\0'};
   static char debugMSG[UART2_TX_Buffersize] = {'\0'};
   static int8_t i=0;
-  static uint8_t up=1;
+//  static uint8_t up=1;
   static uint16_t loop=0;
   static uint16_t ch1=0, ch2=0;
 
