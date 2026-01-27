@@ -18,6 +18,7 @@ volatile uint8_t ready_RX_UART2 = 1;
 volatile uint8_t ready_TX_UART2 = 1;
 volatile uint8_t ready_RX_UART1 = 1;
 volatile uint8_t ready_TX_UART1 = 1;
+volatile uint32_t RX1_overrun = 0;
 
 
 // In your initialization (e.g., user_init()):
@@ -66,7 +67,7 @@ void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
 
 void user_loop_step(void)
 {
-  static uint32_t last_millis=0, last_250millis=0;
+  static uint32_t last_millis=0, last_250millis=0, servo_update_millis=0;
 //  static char MSG[StringBufferSize] = {'\0'};
   static char debugMSG[UART2_TX_Buffersize] = {'\0'};
   static int8_t i=0;
@@ -81,6 +82,16 @@ void user_loop_step(void)
     ch2 = crsf.getChannel(2);
   }
   else {ch1 =999; ch2=999;}
+  if (actual_millis-servo_update_millis >0) {
+    
+    servo_update_millis = actual_millis;
+        int count = __HAL_TIM_GET_COUNTER(&htim2);
+    if ((count>2250) && (count <19950)) {
+    for (uint8_t channel=0; channel<num_PWM_channels; channel++){
+      uint16_t PWM_value = crsf.getChannel(channel+1);
+      user_pwm_setvalue(channel, PWM_value);
+    }}
+  }
   
   if (actual_millis - last_250millis > 100){
     last_250millis = actual_millis;
@@ -91,8 +102,8 @@ void user_loop_step(void)
     loop++;
   }
 
-//  HAL_UART
 
+/*
   if(actual_millis - last_millis > 0) {
     int count = __HAL_TIM_GET_COUNTER(&htim2);
     if ((count>2250) && (count <19950)) {
@@ -111,6 +122,7 @@ void user_loop_step(void)
       }
     }
   }
+    */
 }
 
 
@@ -129,14 +141,6 @@ int8_t send_UART2(char* msg) {
    }
 }
 
-void user_HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-     if (huart->Instance == USART2) {
-      ready_RX_UART2 = 1;
-    } 
-    if (huart->Instance == USART1) {
-      ready_RX_UART1 = 1; 
-    }
-}
 
 void user_HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 

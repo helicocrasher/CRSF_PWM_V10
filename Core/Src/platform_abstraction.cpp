@@ -9,13 +9,19 @@
 STM32Stream* g_uartStream = nullptr;
 
 extern UART_HandleTypeDef huart1;
+extern volatile uint32_t RX1_overrun;
 
 extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart == &huart1 && g_uartStream) {
         // Pass received byte to STM32Stream
+        if (huart->ErrorCode == HAL_UART_ERROR_ORE) {
+            // Handle overrun error
+            __HAL_UART_CLEAR_OREFLAG(&huart1);
+        RX1_overrun++;      
+    }
         g_uartStream->onRxByte(g_uartStream->_rxBuf[g_uartStream->_head]);
         // Re-arm RX interrupt for next byte
-        HAL_UART_Receive_IT(huart, &g_uartStream->_rxBuf[g_uartStream->_head], 5);
+        HAL_UART_Receive_IT(huart, &g_uartStream->_rxBuf[g_uartStream->_head], 1);
     }
 }
 
@@ -31,7 +37,7 @@ STM32Stream::STM32Stream(UART_HandleTypeDef *huart)
 {
     g_uartStream = this;
     // Enable UART RX interrupt
-    HAL_UART_Receive_IT(_huart, &_rxBuf[0], 1);
+    HAL_UART_Receive_IT(_huart, &_rxBuf[0], 5);
 }
 
 int STM32Stream::available() {
@@ -57,12 +63,12 @@ int STM32Stream::read() {
 }
 
 size_t STM32Stream::write(uint8_t b) {
-    HAL_UART_Transmit(_huart, &b, 1, 100);
+//    HAL_UART_Transmit(_huart, &b, 1, 100);
     return 1;
 }
 
 size_t STM32Stream::write(const uint8_t *buf, size_t len) {
-    HAL_UART_Transmit(_huart, (uint8_t*)buf, len, 100);
+ //   HAL_UART_Transmit(_huart, (uint8_t*)buf, len, 100);
     return len;
 }
 
