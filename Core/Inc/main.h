@@ -59,6 +59,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define ADC1_4_VBAT_Pin GPIO_PIN_4
+#define ADC1_4_VBAT_GPIO_Port GPIOA
+#define ADC1_5_CRNT_Pin GPIO_PIN_5
+#define ADC1_5_CRNT_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 

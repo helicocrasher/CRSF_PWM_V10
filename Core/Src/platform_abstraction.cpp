@@ -4,6 +4,7 @@
  */
 
 #include "platform_abstraction.h"
+#include "stm32g0xx_hal_adc.h"
 #include <cstdint>
 #include <cstring>
 
@@ -11,13 +12,26 @@
 STM32Stream* g_uartStream = nullptr;
 
 extern UART_HandleTypeDef huart1;
+extern ADC_HandleTypeDef hadc1;
 extern volatile uint32_t RX1_overrun, ELRS_TX_count;
 extern volatile uint8_t ready_RX_UART1;
 extern volatile uint8_t ready_TX_UART1;
 extern volatile uint8_t ready_TX_UART2; 
 extern volatile uint8_t ready_RX_UART2; 
+extern volatile uint32_t adcValue, ADC_count;
 
-char UART1_TX_Buffer[100];
+char UART1_TX_Buffer[20];
+
+extern "C" void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
+    if (hadc->Instance == ADC1) {
+        // Handle ADC conversion complete event
+        // For example, read the converted value
+        adcValue = HAL_ADC_GetValue(&hadc1);
+        // Process adcValue as needed
+        ADC_count++;
+    }
+//    while (1);
+}
 
 extern "C" void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART2) {
