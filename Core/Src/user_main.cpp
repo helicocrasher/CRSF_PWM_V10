@@ -34,7 +34,7 @@ float bat_voltage=0.0f;
 
 // In your initialization (e.g., user_init()):
 inline void init_crsf() {
-  crsf.begin(crsfSerial);
+  crsf.begin(*crsfSerial);
     // Now crsf can be used normally
 }
 
@@ -59,7 +59,7 @@ void user_init(void)
 
   // Ensure UART is initialized before creating STM32Stream
   crsfSerial = new STM32Stream(&huart1);
-  crsf.begin(crsfSerial);
+  crsf.begin(*crsfSerial);
   HAL_ADCEx_Calibration_Start(&hadc1);
 //    HAL_ADC_Start_IT(&hadc1);
   HAL_Delay(20);
@@ -116,7 +116,7 @@ void user_loop_step(void)
   if (actual_millis - last_250millis > 100){
     last_250millis = actual_millis;
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14 );
-    snprintf(debugMSG, StringBufferSize, "%7d : ELRS_UP = %1d  / CH1 = %4d CH2 =  %4d, Restart = %4lu\r\n", loop, crsf.isLinkUp(), ch1, ch2, crsfSerialRestartRX_counter);
+    snprintf(debugMSG, StringBufferSize, "%7d : ELRS_UP = %1d  / CH1 = %4d CH2 =  %4d, Restart = %4lu\r\n", loop, crsf.isLinkUp(), ch1, ch2, (unsigned long)crsfSerialRestartRX_counter);
     send_UART2(debugMSG);
     //HAL_UART_Transmit(&huart2, (const uint8_t *)MSG, sizeof(MSG), 100);
 

@@ -26,13 +26,12 @@ endif()
 # Set the project name
 set(CMAKE_PROJECT_NAME CRSF_PWM_V10)
 
+# Core project settings
+project(${CMAKE_PROJECT_NAME})
+
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
-
-
-# Core project settings
-project(${CMAKE_PROJECT_NAME})
 
 # Enable C++ for user-provided C++ files
 set(CMAKE_CXX_STANDARD 11)

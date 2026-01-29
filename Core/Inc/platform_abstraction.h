@@ -66,4 +66,12 @@ uint32_t platform_millis();
 // Helper macro for compatibility
 #define millis() platform_millis()
 
+
+#ifdef __cplusplus
+// Arduino-style map() function
+inline long map(long x, long in_min, long in_max, long out_min, long out_max) {
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+#endif
+
 #endif /* PLATFORM_ABSTRACTION_H */
