@@ -25,7 +25,8 @@ volatile uint8_t ready_RX_UART2 = 1;
 volatile uint8_t ready_TX_UART2 = 1;
 volatile uint8_t ready_RX_UART1 = 1;
 volatile uint8_t ready_TX_UART1 = 1;
-volatile uint32_t RX1_overrun = 0, ELRS_TX_count = 0, adcValue=0, ADC_count=0;
+volatile uint32_t RX1_overrun = 0, crsfSerialRestartRX_counter=0;
+volatile uint32_t ELRS_TX_count = 0, adcValue=0, ADC_count=0;
 float bat_voltage=0.0f;
 
 
@@ -76,30 +77,32 @@ void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
 }
 
 #define StringBufferSize 160
-#define UART2_TX_Buffersize 100
+//#define UART2_TX_Buffersize 100
 
 void user_loop_step(void)
 {
-  static uint32_t  last_250millis=0, servo_update_millis=0;
-//  static char MSG[StringBufferSize] = {'\0'};
-  static char debugMSG[UART2_TX_Buffersize] = {'\0'};
-  static int8_t i=0;
-//  static uint8_t up=1;
+  static uint32_t  actual_millis, last_250millis=0, servo_update_millis=0, last_restart_millis=0;
+  static char debugMSG[StringBufferSize] = {'\0'};
   static uint16_t loop=0;
   static uint16_t ch1=0, ch2=0;
 
-  uint32_t actual_millis = HAL_GetTick();
+  actual_millis = HAL_GetTick();
   crsf.update();
   if (crsf.isLinkUp()) {
     ch1 = crsf.getChannel(1);  // Get channel 1 in microseconds
     ch2 = crsf.getChannel(2);
   }
-  else {ch1 =999; ch2=999;}
-
+  else {
+    ch1 =999; ch2=999;
+    if (actual_millis-last_restart_millis > 10){
+    last_restart_millis = actual_millis;
+    crsfSerial->restartUARTRX(&huart1);
+    crsfSerialRestartRX_counter++;
+    }
+  }  
   if (actual_millis-servo_update_millis >0) {
-    
-    servo_update_millis = actual_millis;
-        int count = __HAL_TIM_GET_COUNTER(&htim2);
+     servo_update_millis = actual_millis;
+    int count = __HAL_TIM_GET_COUNTER(&htim2);
     if ((count>2250) && (count <19950)) {
     for (uint8_t channel=0; channel<num_PWM_channels; channel++){
       uint16_t PWM_value = crsf.getChannel(channel+1);
@@ -110,7 +113,7 @@ void user_loop_step(void)
   if (actual_millis - last_250millis > 100){
     last_250millis = actual_millis;
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14 );
-    snprintf(debugMSG, StringBufferSize, "%7d : PWM = %4d ms / CH1 = %4d CH2 =  %4d Batt = %5.2f\r\n", loop, i*4, ch1, ch2, bat_voltage);
+    snprintf(debugMSG, StringBufferSize, "%7d : ELRS_UP = %1d  / CH1 = %4d CH2 =  %4d, Restart = %4lu\r\n", loop, crsf.isLinkUp(), ch1, ch2, crsfSerialRestartRX_counter);
     send_UART2(debugMSG);
     //HAL_UART_Transmit(&huart2, (const uint8_t *)MSG, sizeof(MSG), 100);
 
@@ -129,8 +132,8 @@ int8_t send_UART2(char* msg) {
     if (ready_TX_UART2==1) {
         ready_TX_UART2 = 0; 
         uint8_t msg_len = strlen(msg);
-        if (msg_len > UART2_TX_Buffersize) {
-            msg_len = UART2_TX_Buffersize; // Limit the message length to prevent overflow
+        if (msg_len > StringBufferSize) {
+            msg_len = StringBufferSize; // Limit the message length to prevent overflow
         }
         HAL_UART_Transmit_IT(&huart2, (uint8_t*)msg, msg_len);
         return 0;

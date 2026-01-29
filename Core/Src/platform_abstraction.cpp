@@ -5,6 +5,7 @@
 
 #include "platform_abstraction.h"
 #include "stm32g0xx_hal_adc.h"
+#include "stm32g0xx_hal_uart.h"
 #include <cstdint>
 #include <cstring>
 
@@ -55,20 +56,40 @@ extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         HAL_UART_Receive_IT(huart, &g_uartStream->_rxBuf[g_uartStream->_head], 1);
     }
 }
-
+/*
 extern "C" void stm32stream_rearm_rx_irq(void) {
     if (g_uartStream) {
         // Re-enable interrupt for next byte (safe for C)
         HAL_UART_Receive_IT(g_uartStream->_huart, &g_uartStream->_rxBuf[g_uartStream->_head], 1);
     }
 }
+*/
 
 STM32Stream::STM32Stream(UART_HandleTypeDef *huart) 
     : _huart(huart), _head(0), _tail(0) 
 {
+    if (huart == &huart1 && g_uartStream) {
+        // Pass received byte to STM32Stream
+        if (huart->ErrorCode == HAL_UART_ERROR_ORE) {
+            // Handle overrun error
+            __HAL_UART_CLEAR_OREFLAG(&huart1);
+            RX1_overrun++; 
+        }
+    }
     g_uartStream = this;
     // Enable UART RX interrupt
-    HAL_UART_Receive_IT(_huart, &_rxBuf[0], 5);
+    HAL_UART_Receive_IT(_huart, &_rxBuf[0], 1); // 2 calls required to reliably start CRSF UART RX
+    HAL_UART_Receive_IT(_huart, &_rxBuf[0], 1);
+}
+
+int STM32Stream::restartUARTRX(UART_HandleTypeDef *huart) {
+    _huart = huart;
+    _head = 0;
+    _tail = 0;
+    // Enable UART RX interrupt
+    HAL_UART_Receive_IT(_huart, &_rxBuf[0], 1); // 2 calls required to reliably restart CRSF UART RX
+    HAL_UART_Receive_IT(_huart, &_rxBuf[0], 1);
+    return 0;
 }
 
 int STM32Stream::available() {

@@ -27,6 +27,7 @@ public:
 class STM32Stream : public Stream {
 public:
     STM32Stream(UART_HandleTypeDef *huart);
+    int restartUARTRX(UART_HandleTypeDef *huart);
     int available() override;
     int read() override;
     size_t write(uint8_t b) override;
