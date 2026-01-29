@@ -11,9 +11,11 @@
 #define BAT_ADC_Voltage_divider 11.0f // Voltage divider ratio 10k and 1k resistors
 
 TIM_HandleTypeDef* Timer_map[num_PWM_channels];
+//TIM_HandleTypeDef* Timer_map[num_PWM_channels]={&htim2,&htim2,&htim16,&htim2,&htim3,&htim3,&htim3,&htim3,&htim1,&htim1};
+
 unsigned int PWM_Channelmap[num_PWM_channels]={TIM_CHANNEL_1,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_3,TIM_CHANNEL_4,TIM_CHANNEL_3,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_1,TIM_CHANNEL_2};
-
-
+//                                                    1                 2                 3                 4                 5                 6                 7                 8                 9                 10  
+//                                                    0         1                         4                 8                12                 8                 4                 0                 0                  4                
 extern "C" {
 static void sendCellVoltage(uint8_t cellId, float voltage);
 extern ADC_HandleTypeDef hadc1;
@@ -39,6 +41,7 @@ inline void init_crsf() {
 void user_init(void)
 {
   HAL_Delay(5);
+/**/  
   Timer_map[0]=&htim2;
   Timer_map[1]=&htim2;
   Timer_map[2]=&htim16;
@@ -49,7 +52,7 @@ void user_init(void)
   Timer_map[7]=&htim3;
   Timer_map[8]=&htim1;
   Timer_map[9]=&htim1;
-
+/**/
   for (unsigned int i=0; i<num_PWM_channels; i++){
     HAL_TIM_PWM_Start(Timer_map[i], PWM_Channelmap[i]);
   }
@@ -77,7 +80,7 @@ void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt)
 }
 
 #define StringBufferSize 160
-//#define UART2_TX_Buffersize 100
+
 
 void user_loop_step(void)
 {
@@ -89,8 +92,8 @@ void user_loop_step(void)
   actual_millis = HAL_GetTick();
   crsf.update();
   if (crsf.isLinkUp()) {
-    ch1 = crsf.getChannel(1);  // Get channel 1 in microseconds
-    ch2 = crsf.getChannel(2);
+    ch1 = crsf.getChannel(6);  // Get channel 1 in microseconds
+    ch2 = crsf.getChannel(7);
   }
   else {
     ch1 =999; ch2=999;
