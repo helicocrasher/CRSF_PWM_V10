@@ -28,14 +28,11 @@ extern "C" {
 #endif
 void user_init(void);
 void user_loop_step(void);
-void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt);
-void user_HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
-void user_HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);   
-int8_t send_UART2(char* msg); 
+//static void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_lengt);
+//int8_t send_UART2(char* msg); 
+
 #ifdef __cplusplus
-}
+}  // extern "C"
 #endif
-
-
 
 #endif /* USER_MAIN_H */
