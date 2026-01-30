@@ -44,8 +44,10 @@ volatile uint8_t ready_TX_UART2 = 1;
 volatile uint8_t ready_RX_UART1 = 1;
 volatile uint8_t ready_TX_UART1 = 1;
 volatile uint32_t RX1_overrun = 0, crsfSerialRestartRX_counter=0, main_loop_cnt=0;
-volatile uint32_t ELRS_TX_count = 0, adcValue=0, ADC_count=0;
-float bat_voltage=0.0f;
+volatile uint32_t ELRS_TX_count = 0, ADC_count=0;
+volatile uint16_t ADC_buffer[2]; // ADC buffer for DMA
+volatile int isADCFinished=0;
+static float bat_voltage=0.0f, bat_current=0.0f;
 
 /*
 // In your initialization (e.g., user_init()):
@@ -66,7 +68,8 @@ void user_init(void)  // same as the "arduino setup()" function
   crsf.begin(*crsfSerial);
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_Delay(20);
-  HAL_ADC_Start(&hadc1);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_buffer, 2);
+//  HAL_ADC_Start(&hadc1);
 }
 
 
@@ -88,14 +91,24 @@ void user_loop_step(void) // same as the "arduino loop()" function
 
 static void analog_measurement_task(uint32_t actual_millis) {
   // Placeholder for future analog measurement tasks
-  static uint32_t last_adc_millis = 0;;
+  static uint32_t last_adc_millis = 0;
+  static uint16_t adcValue1 =0, adcValue2=0;
+  #define VOLTAGE_DIV 11.0f
+  #define SHUNT_RESISTOR_OHMS 0.066f
+  #define ADC_GAIN 1.01f
+  #define VOLTAGE_OFFSET 0.00f
+  #define CURRENT_OFFSET 0.01f
+
   if (actual_millis - last_adc_millis < 100) return;
-  adcValue = HAL_ADC_GetValue(&hadc1);
-  bat_voltage = ((float)adcValue * 3.3f / 4095.0f * 11.0f*1.01f/(float)BAT_ADC_Oversampling_Ratio)-0.00f; // Assuming a voltage divider with equal resistors    sendCellVoltage(1, bat_voltage);
-  sendCellVoltage(1, bat_voltage);
-//    HAL_ADC_Start_IT(&hadc1);
-    HAL_ADC_Start(&hadc1);
+  last_adc_millis = actual_millis;
+  if (isADCFinished == 0) return; // Previous ADC conversion not finished
+  isADCFinished = 0;
+  adcValue1 = ADC_buffer[0]; // Read the first ADC channel (VBAT);
+  adcValue2 = ADC_buffer[1]; // Read the second ADC channel (Current);
+  bat_voltage = ((float)adcValue1 * 3.3f / 4095.0f * VOLTAGE_DIV * ADC_GAIN/(float)BAT_ADC_Oversampling_Ratio)-VOLTAGE_OFFSET;
+  bat_current = ((float)adcValue2 * 3.3f / 4095.0f * ADC_GAIN/(float)BAT_ADC_Oversampling_Ratio / SHUNT_RESISTOR_OHMS)-CURRENT_OFFSET; 
 }
+
 
 /*
 static void CRSF_reception_task(void) {
@@ -117,8 +130,15 @@ static void CRSF_reception_watchdog_task(uint32_t actual_millis) {
 static void telemetry_transmission_task(uint32_t actual_millis) {
   // Placeholder for future telemetry transmission tasks  
   static uint32_t last_telemetry_millis = 0;
-  if (actual_millis - last_telemetry_millis < 500) return;
-  sendCellVoltage(1, bat_voltage);
+  static uint32_t telemetry_carousel = 0;
+  #define CAROUSEL_MAX 2
+
+  if (actual_millis - last_telemetry_millis < 250/CAROUSEL_MAX) return;
+  if (telemetry_carousel ==0)   sendCellVoltage(1, bat_voltage);
+  if (telemetry_carousel ==1)   sendCellVoltage(2, bat_current);
+  last_telemetry_millis = actual_millis;
+  telemetry_carousel++;
+  telemetry_carousel %= CAROUSEL_MAX;
 }
 
 static void pwm_update_task(uint32_t actual_millis) {

@@ -15,6 +15,7 @@ long map(long x, long in_min, long in_max, long out_min, long out_max) {
 #include "stm32g0xx_hal_uart.h"
 #include <cstdint>
 #include <cstring>
+#include <sys/_intsup.h>
 
 // Global pointer for HAL callback
 STM32Stream* g_uartStream = nullptr;
@@ -27,6 +28,7 @@ extern volatile uint8_t ready_TX_UART1;
 extern volatile uint8_t ready_TX_UART2; 
 extern volatile uint8_t ready_RX_UART2; 
 extern volatile uint32_t adcValue, ADC_count;
+extern int isADCFinished;
 
 char UART1_TX_Buffer[20];
 
@@ -34,9 +36,10 @@ extern "C" void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
     if (hadc->Instance == ADC1) {
         // Handle ADC conversion complete event
         // For example, read the converted value
-        adcValue = HAL_ADC_GetValue(&hadc1);
+        // adcValue = HAL_ADC_GetValue(&hadc1);
         // Process adcValue as needed
         ADC_count++;
+        isADCFinished = 1;
     }
 //    while (1);
 }
