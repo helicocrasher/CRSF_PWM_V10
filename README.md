@@ -11,6 +11,8 @@ The code is developed using STM32CubeMX and Visual Studio Code.
 - **Platform:** STM32 microcontroller (STM32CubeMX code generation)
 - **Development Environment:** Visual Studio Code with STM32CUBE extension + STM32CubeMX
 
+## !!Warning do not use this SW for RC models of any value (this SW is not fit for any such purpose)!! 
+
 ## Features
 - **CRSF Serial Input:** Receives servo data via CRSF protocol
 - **CRSF Serial Output:** Sends telemetry data via CRSF protocol
