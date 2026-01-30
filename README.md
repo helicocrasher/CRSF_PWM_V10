@@ -1,6 +1,11 @@
 # CRSF PWM V10 (Private Reimplementation)
 
-This project is a private reimplementation of the Matek CRSF PWM V10, developed using STM32CubeMX and Visual Studio Code.
+This project is a private reimplementation of the Matek CRSF PWM V10 firmware. The target hardware is the Matek CRSF PWM V10 board with its STM32G031 microcontroller. 
+Main objective: Learning experience on STM32 HAL programming, improved voltage & current sensor performance vs original code. 
+The functionality is a subset of the Matek FW. 
+- Configuration from PC is done "in code". 
+- No Failsafe output configuration is available (yet)   
+The code is developed using STM32CubeMX and Visual Studio Code.
 
 ## Overview
 - **Platform:** STM32 microcontroller (STM32CubeMX code generation)
@@ -24,14 +29,17 @@ This project is a private reimplementation of the Matek CRSF PWM V10, developed 
 - `cmake/` - CMake build configuration
 
 ## Files
-- A lot of STM32CUBEMX generated files 
-- Core/src/user_man.cpp: Arduino like main file conatains "setup()" and "loop()"
-- Core/inc/user_main.h :
-- Core/src/platform_abstraction.cpp
+- A lot of STM32CUBEMX generated files: 
+  - `Core/main.c`: No code is written ito this file, just the necessary #includes added plus 2 function calls user_init(), user_loop_step()  
+- User files:  
+- `Core/src/user_man.cpp`: Arduino like main file conatains "setup()" and "loop()" and tasksk called in these functions
+- `Core/src/platform_abstraction.cpp`
   - glue logic to replace the missing arduino plaform functions 
   - adapt to the arduino based AlFredoCRSF library
   - interrupt back functions for the 2 UARTS 
   - DMA call back function for the analog measurements / ADC (2 channels used)  
+- `Core/inc/user_main.h`
+- `Core/inc/platform_abstraction.h`  
 
 
 
