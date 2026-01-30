@@ -76,11 +76,10 @@ void user_loop_step(void) // same as the "arduino loop()" function
 
   actual_millis = HAL_GetTick();
   crsf.update();
-  if (!crsf.isLinkUp()) CRSF_reception_watchdog_task(actual_millis);
+  CRSF_reception_watchdog_task(actual_millis);
   pwm_update_task(actual_millis);
   LED_and_debugSerial_task(actual_millis);
   analog_measurement_task(actual_millis);
-
   telemetry_transmission_task(actual_millis);
   error_handling_task();
   main_loop_cnt++;
@@ -106,10 +105,11 @@ static void CRSF_reception_task(void) {
 
 static void CRSF_reception_watchdog_task(uint32_t actual_millis) {
   // Placeholder for future CRSF reception watchdog tasks  
-  static  uint32_t last_restart_millis = 0;
-
-  if (actual_millis-last_restart_millis <10) return;
-  last_restart_millis = actual_millis;
+  static  uint32_t last_watchdog_millis = 0;
+  if (crsf.isLinkUp()) {last_watchdog_millis = actual_millis;  return; } // Link is up, reset watchdog timer - nothing to do
+  if (actual_millis-last_watchdog_millis <10) return; // Wait for 10ms of no link or last restart attempt
+  // No link for more than 10ms - restart CRSF UART RX
+  last_watchdog_millis = actual_millis;
   crsfSerial->restartUARTRX(&huart1);
   crsfSerialRestartRX_counter++;
 }
@@ -139,7 +139,7 @@ static void LED_and_debugSerial_task(uint32_t actual_millis) {
   uint16_t ch1 = crsf.getChannel(1);
   uint16_t ch2 = crsf.getChannel(2);
 
-  if (actual_millis - last_debugTerm_millis < 100) return;
+  if (actual_millis - last_debugTerm_millis < 200) return;
   last_debugTerm_millis = actual_millis;
   HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14 );
   snprintf(debugMSG, StringBufferSize, "%7lu : ELRS_UP = %1d  / CH1 = %4d CH2 =  %4d, Restart = %4lu\r\n", (unsigned long) main_loop_cnt, crsf.isLinkUp(), ch1, ch2, (unsigned long)crsfSerialRestartRX_counter);
