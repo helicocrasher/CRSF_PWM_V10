@@ -9,7 +9,7 @@ The code is developed using STM32CubeMX and Visual Studio Code.
 
 ## Overview
 - **Platform:** STM32 microcontroller (STM32CubeMX code generation)
-- **Development Environment:** Visual Studio Code + STM32CubeMX
+- **Development Environment:** Visual Studio Code with STM32CUBE extension + STM32CubeMX
 
 ## Features
 - **CRSF Serial Input:** Receives servo data via CRSF protocol
@@ -30,6 +30,7 @@ The code is developed using STM32CubeMX and Visual Studio Code.
 
 ## Files
 - A lot of STM32CUBEMX generated files: 
+  - `/CRSF_PWM_V10.ioc`: The STM32CubeMX project file is the master for the STM32 code generation. To change or adapt generated code use the STM32CubeMX software
   - `Core/main.c`: No code is written ito this file, just the necessary #includes added plus 2 function calls user_init(), user_loop_step()  
 - User files:  
 - `Core/src/user_man.cpp`: Arduino like main file conatains "setup()" and "loop()" and tasksk called in these functions
