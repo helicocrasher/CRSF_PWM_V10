@@ -43,7 +43,7 @@ volatile uint8_t ready_RX_UART2 = 1;
 volatile uint8_t ready_TX_UART2 = 1;
 volatile uint8_t ready_RX_UART1 = 1;
 volatile uint8_t ready_TX_UART1 = 1;
-volatile uint32_t RX1_overrun = 0, crsfSerialRestartRX_counter=0, main_loop_cnt=0;
+volatile uint32_t RX1_overrun = 0, crsfSerialRestartRX_counter=0, main_loop_cnt=0, ADC_period=0;
 volatile uint32_t ELRS_TX_count = 0, ADC_count=0;
 volatile uint16_t ADC_buffer[2]; // ADC buffer for DMA
 volatile int isADCFinished=0;
@@ -90,21 +90,27 @@ void user_loop_step(void) // same as the "arduino loop()" function
 
 
 static void analog_measurement_task(uint32_t actual_millis) {
-  // Placeholder for future analog measurement tasks
+  // analog measurement task running with ADC speed is fed by DMA ~22ms with oversampling 16, 
+  // ADC clock is 32MHz prescaler 128, sample time 160.5 cycles Total conversion time per channel = 160.5 + 12.5 =173 cycles
+  //
   static uint32_t last_adc_millis = 0;
-  static uint16_t adcValue1 =0, adcValue2=0;
+//  static uint16_t adcValue1 =0, adcValue2=0;
+  static float adcValue1 =0, adcValue2=0;
   #define VOLTAGE_DIV 11.0f
   #define SHUNT_RESISTOR_OHMS 0.066f
   #define ADC_GAIN 1.01f
   #define VOLTAGE_OFFSET 0.00f
-  #define CURRENT_OFFSET 0.01f
+  #define CURRENT_OFFSET 0.015f
+  #define IIR_ALPHA 0.239057f // IIR filter alpha coefficient (for Sample_frequency/20 cutoff)
+  #define IIR_BETA (1.0f - IIR_ALPHA)
 
-  if (actual_millis - last_adc_millis < 100) return;
-  last_adc_millis = actual_millis;
   if (isADCFinished == 0) return; // Previous ADC conversion not finished
+  ADC_period=actual_millis - last_adc_millis;
+  last_adc_millis = actual_millis;
   isADCFinished = 0;
-  adcValue1 = ADC_buffer[0]; // Read the first ADC channel (VBAT);
-  adcValue2 = ADC_buffer[1]; // Read the second ADC channel (Current);
+//  adcValue1 = ADC_buffer[0]; // Read the first ADC channel (VBAT);
+  adcValue1 = adcValue1*IIR_BETA + (float)ADC_buffer[0] * IIR_ALPHA; // Filter the first ADC channel (VBAT);
+  adcValue2 = adcValue2*IIR_BETA + (float)ADC_buffer[1] * IIR_ALPHA; // Filter the second ADC channel (Current);
   bat_voltage = ((float)adcValue1 * 3.3f / 4095.0f * VOLTAGE_DIV * ADC_GAIN/(float)BAT_ADC_Oversampling_Ratio)-VOLTAGE_OFFSET;
   bat_current = ((float)adcValue2 * 3.3f / 4095.0f * ADC_GAIN/(float)BAT_ADC_Oversampling_Ratio / SHUNT_RESISTOR_OHMS)-CURRENT_OFFSET; 
 }
@@ -134,6 +140,8 @@ static void telemetry_transmission_task(uint32_t actual_millis) {
   #define CAROUSEL_MAX 2
 
   if (actual_millis - last_telemetry_millis < 250/CAROUSEL_MAX) return;
+  if(bat_voltage<0.0f) bat_voltage=0.0f;
+  if(bat_current<0.0f) bat_current=0.0f;
   if (telemetry_carousel ==0)   sendCellVoltage(1, bat_voltage);
   if (telemetry_carousel ==1)   sendCellVoltage(2, bat_current);
   last_telemetry_millis = actual_millis;
@@ -162,7 +170,7 @@ static void LED_and_debugSerial_task(uint32_t actual_millis) {
   if (actual_millis - last_debugTerm_millis < 200) return;
   last_debugTerm_millis = actual_millis;
   HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_14 );
-  snprintf(debugMSG, StringBufferSize, "%7lu : ELRS_UP = %1d  / CH1 = %4d CH2 =  %4d, Restart = %4lu\r\n", (unsigned long) main_loop_cnt, crsf.isLinkUp(), ch1, ch2, (unsigned long)crsfSerialRestartRX_counter);
+  snprintf(debugMSG, StringBufferSize, "%7lu : ELRS_UP = %1d  / CH1 = %4d CH2 =  %4d, Restart = %4lu ADC_period = %4lu\r\n", (unsigned long) main_loop_cnt, crsf.isLinkUp(), ch1, ch2, (unsigned long)crsfSerialRestartRX_counter,(unsigned long)ADC_period);
   send_UART2(debugMSG);
 }
 
