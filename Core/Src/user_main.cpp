@@ -1,4 +1,5 @@
 #include "user_main.h"
+#include <cstddef>
 #include <cstdint>
 #include <stdio.h>
 #include "../../AlfredoCRSF/src/AlfredoCRSF.h"
@@ -33,7 +34,7 @@ static void error_handling_task(void);
 // basic functions
 static void sendCellVoltage(uint8_t cellId, float voltage);
 static void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_length);
-int8_t send_UART2(char* msg);
+int8_t send_UART2(const char* msg);
 
 extern ADC_HandleTypeDef hadc1;
 //static STM32Stream crsfSerial(&huart1);  // Create STM32Stream object for CRSF communication using UART1
@@ -46,7 +47,7 @@ volatile uint8_t ready_TX_UART1 = 1;
 volatile uint32_t RX1_overrun = 0, crsfSerialRestartRX_counter=0, main_loop_cnt=0, ADC_period=0;
 volatile uint32_t ELRS_TX_count = 0, ADC_count=0;
 volatile uint16_t ADC_buffer[2]; // ADC buffer for DMA
-volatile int isADCFinished=0;
+volatile uint8_t isADCFinished=0;
 static float bat_voltage=0.0f, bat_current=0.0f;
 
 /*
@@ -69,7 +70,6 @@ void user_init(void)  // same as the "arduino setup()" function
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_Delay(20);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_buffer, 2);
-
 }
 
 
@@ -202,14 +202,14 @@ static void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_length) {
   HAL_TIM_PWM_ConfigChannel(Timer_map[pwm_channel], &sConfigOC, PWM_Channelmap[pwm_channel]);
 }
 
-int8_t send_UART2(char* msg) {   
+int8_t send_UART2(const char* msg) {   
     if (ready_TX_UART2==0) return -1; // Previous transmission still ongoing
     ready_TX_UART2 = 0; 
-    uint16_t msg_len = strlen(msg);
+    size_t msg_len = strlen(msg);
     if (msg_len > StringBufferSize) {
       msg_len = StringBufferSize; // Limit the message length to prevent overflow
     }
-    HAL_UART_Transmit_IT(&huart2, (uint8_t*)msg, msg_len);
+    HAL_UART_Transmit_IT(&huart2, (uint8_t*)msg, (uint16_t)msg_len);
     return 0;
 }
 

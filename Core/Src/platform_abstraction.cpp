@@ -31,7 +31,7 @@ extern volatile uint8_t ready_RX_UART2;
 extern volatile uint32_t adcValue, ADC_count;
 extern volatile uint8_t isADCFinished;
 
-char UART1_TX_Buffer[20];
+char UART1_TX_Buffer[64];
 
 extern "C" void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
     if (hadc->Instance == ADC1) {
@@ -143,11 +143,16 @@ size_t STM32Stream::write(const uint8_t *buf, size_t len) {
 
 //    HAL_UART_Transmit(_huart, (uint8_t*)buf, len, 100); // Blocking version - does work but blocking
     if (ready_TX_UART1==  1 ) { // Non-blocking version - does work
-      ELRS_TX_count+=len;  
-      memcpy(&UART1_TX_Buffer[0], buf, len);
-      HAL_UART_Transmit_IT(_huart, (uint8_t*)UART1_TX_Buffer, len); 
+      // Limit the number of bytes to the size of UART1_TX_Buffer to avoid overflow
+      size_t txLen = len;
+      if (txLen > sizeof(UART1_TX_Buffer)) {
+          txLen = sizeof(UART1_TX_Buffer);
+      }
+      ELRS_TX_count += txLen;
+      memcpy(&UART1_TX_Buffer[0], buf, txLen);
+      HAL_UART_Transmit_IT(_huart, (uint8_t*)UART1_TX_Buffer, txLen);
       ready_TX_UART1 = 0;
-      return len;
+      return txLen;
     }
     else {
         return 0;
