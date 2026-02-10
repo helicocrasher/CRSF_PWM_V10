@@ -11,6 +11,7 @@ long map(long x, long in_min, long in_max, long out_min, long out_max) {
  */
 
 #include "platform_abstraction.h"
+#include "stm32g031xx.h"
 #include "stm32g0xx_hal_adc.h"
 #include "stm32g0xx_hal_uart.h"
 #include <cstdint>
@@ -28,7 +29,7 @@ extern volatile uint8_t ready_TX_UART1;
 extern volatile uint8_t ready_TX_UART2; 
 extern volatile uint8_t ready_RX_UART2; 
 extern volatile uint32_t adcValue, ADC_count;
-extern int isADCFinished;
+extern volatile uint8_t isADCFinished;
 
 char UART1_TX_Buffer[20];
 
@@ -39,7 +40,7 @@ extern "C" void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
         // adcValue = HAL_ADC_GetValue(&hadc1);
         // Process adcValue as needed
         ADC_count++;
-        isADCFinished = 1;
+        isADCFinished = +1;
     }
 //    while (1);
 }

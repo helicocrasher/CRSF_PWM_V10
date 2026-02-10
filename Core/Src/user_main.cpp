@@ -36,7 +36,7 @@ static void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_length);
 int8_t send_UART2(char* msg);
 
 extern ADC_HandleTypeDef hadc1;
-
+//static STM32Stream crsfSerial(&huart1);  // Create STM32Stream object for CRSF communication using UART1
 STM32Stream* crsfSerial = nullptr;  // Will be initialized in user_init()
 AlfredoCRSF crsf;
 volatile uint8_t ready_RX_UART2 = 1;
@@ -69,7 +69,7 @@ void user_init(void)  // same as the "arduino setup()" function
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_Delay(20);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_buffer, 2);
-//  HAL_ADC_Start(&hadc1);
+
 }
 
 
@@ -96,13 +96,13 @@ static void analog_measurement_task(uint32_t actual_millis) {
   static uint32_t last_adc_millis = 0;
 //  static uint16_t adcValue1 =0, adcValue2=0;
   static float adcValue1 =0, adcValue2=0;
-  #define VOLTAGE_DIV 11.0f
-  #define SHUNT_RESISTOR_OHMS 0.066f
-  #define ADC_GAIN 1.01f
-  #define VOLTAGE_OFFSET 0.00f
-  #define CURRENT_OFFSET 0.015f
-  #define IIR_ALPHA 0.239057f // IIR filter alpha coefficient (for Sample_frequency/20 cutoff)
-  #define IIR_BETA (1.0f - IIR_ALPHA)
+  static const float VOLTAGE_DIV = 11.0f;
+  static const float SHUNT_RESISTOR_OHMS = 0.066f;
+  static const float ADC_GAIN = 1.01f;
+  static const float VOLTAGE_OFFSET = 0.00f;
+  static const float CURRENT_OFFSET = 0.015f;
+  static const float IIR_ALPHA = 0.239057f; // IIR filter alpha coefficient (for Sample_frequency/20 cutoff)
+  static const float IIR_BETA = 1.0f - IIR_ALPHA;
 
   if (isADCFinished == 0) return; // Previous ADC conversion not finished
   ADC_period=actual_millis - last_adc_millis;
@@ -205,7 +205,7 @@ static void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_length) {
 int8_t send_UART2(char* msg) {   
     if (ready_TX_UART2==0) return -1; // Previous transmission still ongoing
     ready_TX_UART2 = 0; 
-    uint8_t msg_len = strlen(msg);
+    uint16_t msg_len = strlen(msg);
     if (msg_len > StringBufferSize) {
       msg_len = StringBufferSize; // Limit the message length to prevent overflow
     }
