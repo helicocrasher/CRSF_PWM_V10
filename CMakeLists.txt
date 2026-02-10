@@ -60,11 +60,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/platform_abstraction.cpp
     ./AlfredoCRSF/src/AlfredoCRSF.cpp
     ./AlfredoCRSF/src/crc8.cpp
+    ./SPL06-001/SPL06-001.cpp
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ./SPL06-001
 )
 
 # Add project symbols (macros)

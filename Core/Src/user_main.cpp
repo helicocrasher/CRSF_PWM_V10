@@ -6,7 +6,10 @@
 #include "platform_abstraction.h"
 #include "stm32g031xx.h"
 #include "stm32g0xx_hal.h"
+
 #include "stm32g0xx_hal_adc.h"
+#include "../../SPL06-001/SPL06-001.h"
+#include "../../SPL06-001/spl06_001_glue.h" // For SerialI2CDebug macros
 
 #define CRSF_BATTERY_SENSOR_CELLS_MAX 12
 #define BAT_ADC_Oversampling_Ratio 16  // Must match ADC oversampling ratio
@@ -21,6 +24,16 @@ unsigned int PWM_Channelmap[num_PWM_channels]={TIM_CHANNEL_1,TIM_CHANNEL_2,TIM_C
 //   Timer channel offset = TIM_Channel_X -1)*4       0                 4                 0                 8                12                 8                 4                 0                 0                  4                
 
 extern "C" {
+
+#define TARGET_MATEKSYS_CRSF_PWM_V10
+TwoWire BaroWire(SDA2, SCL2);	
+SPL06 BaroSensor(&BaroWire); 
+void setupBaroSensor();  
+void baroProcessingTask(uint32_t millis_now);
+void baroSerialDisplayTask(uint32_t millis_now);
+void telemetrySendBaroAltitude(float altitude, float verticalspd);
+
+
 
 //user_loop tasks - timed - prototype declarations
 static void CRSF_reception_watchdog_task(uint32_t actual_millis);
@@ -50,6 +63,15 @@ volatile uint16_t ADC_buffer[2]; // ADC buffer for DMA
 volatile uint8_t isADCFinished=0;
 static float bat_voltage=0.0f, bat_current=0.0f;
 
+static const float IIR_ALPHA  = 0.135755f;  // 0.5Hz cut off (fc/40 / fc=Hz /Tc=320ms)
+static const float IIR_BETA  = (1.0f - IIR_ALPHA);
+
+static float GND_altitude=0;
+static float previous_alt_ASL=0;
+static float vario=0,filt_alt_AGL=0;
+static double filt_vario=0, filt_alt_ASL=0;
+static uint32_t GND_alt_count=0;
+
 /*
 // In your initialization (e.g., user_init()):
 inline void init_crsf() {
@@ -70,6 +92,7 @@ void user_init(void)  // same as the "arduino setup()" function
   HAL_ADCEx_Calibration_Start(&hadc1);
   HAL_Delay(20);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)ADC_buffer, 2);
+  setupBaroSensor();
 }
 
 
@@ -83,6 +106,8 @@ void user_loop_step(void) // same as the "arduino loop()" function
   pwm_update_task(actual_millis);
   LED_and_debugSerial_task(actual_millis);
   analog_measurement_task(actual_millis);
+  baroProcessingTask(actual_millis);
+//  baroSerialDisplayTask(actual_millis);
   telemetry_transmission_task(actual_millis);
   error_handling_task();
   main_loop_cnt++;
@@ -137,13 +162,14 @@ static void telemetry_transmission_task(uint32_t actual_millis) {
   // Placeholder for future telemetry transmission tasks  
   static uint32_t last_telemetry_millis = 0;
   static uint32_t telemetry_carousel = 0;
-  #define CAROUSEL_MAX 2
+  #define CAROUSEL_MAX 3
 
   if (actual_millis - last_telemetry_millis < 250/CAROUSEL_MAX) return;
   if(bat_voltage<0.0f) bat_voltage=0.0f;
   if(bat_current<0.0f) bat_current=0.0f;
   if (telemetry_carousel ==0)   sendCellVoltage(1, bat_voltage);
   if (telemetry_carousel ==1)   sendCellVoltage(2, bat_current);
+  if (telemetry_carousel ==2)   telemetrySendBaroAltitude(filt_alt_AGL, filt_vario);
   last_telemetry_millis = actual_millis;
   telemetry_carousel++;
   telemetry_carousel %= CAROUSEL_MAX;
@@ -212,5 +238,102 @@ int8_t send_UART2(const char* msg) {
     HAL_UART_Transmit_IT(&huart2, (uint8_t*)msg, (uint16_t)msg_len);
     return 0;
 }
+
+
+void setupBaroSensor(){   // SPL06-001 sensor version 
+  SerialI2Cdebug_println("SPL06-001 test");
+  unsigned status;
+  BaroWire.begin();
+
+// uint32_t read_data;
+// getI2cData(SPL06_ADDRESS_ALT, 0x0d, 1, (short*) &read_data);
+
+  HAL_Delay(10);
+  
+  status = BaroSensor.begin(SPL06_ADDRESS_ALT,SPL06_PRODID);
+  //unsigned status = BaroSensor.begin(SPL06_ADDRESS_ALT);
+  if (!status) {
+    SerialI2Cdebug_println("Could not find a valid SPL06-001 sensor, check wiring or try a different address!"
+                      "try a different address!");
+    {
+      char buf[32];
+      snprintf(buf, sizeof(buf), "SensorID was:   0x%02X", BaroSensor.sensorID());
+      SerialI2Cdebug_println(buf);
+    }
+    SerialI2Cdebug_println("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085");
+    while (1) HAL_Delay(10);
+  }
+  BaroSensor.setSampling(SPL06::MODE_BACKGND_BOTH,
+                          SPL06::SAMPLING_X16,
+                          SPL06::SAMPLING_X16,
+                          SPL06::RATE_X16,
+                          SPL06::RATE_X16);
+  SerialI2Cdebug_println("SPL06-001 ready");
+}
+
+
+void telemetrySendBaroAltitude(float altitude, float verticalspd)
+{
+  crsf_sensor_baro_altitude_t crsfBaroAltitude = { 0 };
+
+  // Values are MSB first (BigEndian)
+  crsfBaroAltitude.altitude = htobe16((uint16_t)(altitude*10.0 + 10000.0));
+  //crsfBaroAltitude.verticalspd = htobe16((int16_t)(verticalspd*100.0)); //TODO: fix verticalspd in BaroAlt packets
+  crsf.queuePacket(CRSF_SYNC_BYTE, CRSF_FRAMETYPE_BARO_ALTITUDE, &crsfBaroAltitude, sizeof(crsfBaroAltitude) - 2);
+  
+  //Supposedly vertical speed can be sent in a BaroAltitude packet, but I cant get this to work.
+  //For now I have to send a second vario packet to get vertical speed telemetry to my TX.
+  crsf_sensor_vario_t crsfVario = { 0 };
+
+  // Values are MSB first (BigEndian)
+  crsfVario.verticalspd = htobe16((int16_t)(verticalspd*100.0));
+  crsf.queuePacket(CRSF_SYNC_BYTE, CRSF_FRAMETYPE_VARIO, &crsfVario, sizeof(crsfVario));
+}
+/*
+
+void baroSerialDisplayTask(uint32_t millis_now){
+  static uint32_t last_millis=0;
+  if (millis_now - last_millis < 250) return;
+  last_millis = millis_now;
+  {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Temperature = %.2f *C", BaroSensor.readTemperature());
+    SerialI2Cdebug_println(buf);
+    snprintf(buf, sizeof(buf), "Pressure = %.2f Pa", BaroSensor.readPressure());
+    SerialI2Cdebug_println(buf);
+    snprintf(buf, sizeof(buf), "Approx altitude ASL = %.2f m ; Altitude AGL = %.2f m", filt_alt_ASL, filt_alt_AGL);
+    SerialI2Cdebug_println(buf);
+    snprintf(buf, sizeof(buf), "Vario = %.2f m/s", filt_vario);
+    SerialI2Cdebug_println(buf);
+    SerialI2Cdebug_println("");
+  }
+}
+*/
+
+void baroProcessingTask(uint32_t millis_now){
+  float altitude;
+  static uint32_t last_millis=0,loop_counter=0;
+  if (millis_now - last_millis < 100) return;
+  last_millis = millis_now;
+
+  #ifdef TARGET_BLUEPILL  // BMP280 sensor
+    altitude = BaroSensor.readAltitude(1013.25); /* Adjusted to local forecast! */
+  #else                   // SPL06-001 sensor
+    altitude = BaroSensor.readPressureAltitudeMeter(1013.25);
+  #endif
+  if (loop_counter <1000) {    // initialisation --> average ground altitude
+    GND_altitude += altitude;
+    GND_alt_count++;
+    filt_alt_ASL = altitude;
+  } else {
+    filt_alt_ASL = (IIR_ALPHA * altitude) + (IIR_BETA * filt_alt_ASL);
+  }
+  filt_alt_AGL =filt_alt_ASL - (GND_altitude / GND_alt_count);
+  vario=(filt_alt_AGL-previous_alt_ASL)*20;
+  filt_vario = (IIR_ALPHA * vario) + (IIR_BETA * filt_vario);
+  previous_alt_ASL = filt_alt_AGL;
+  loop_counter++;
+}
+
 
 }  // extern "C"
