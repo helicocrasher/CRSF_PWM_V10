@@ -11,6 +11,10 @@
 #include <stdint.h>
 #include <string.h>
 
+void Serial2Debug_print(char* msg) ;
+
+void Serial2Debug_println(char*  msg) ;
+
 
 #ifdef __cplusplus
 // Abstract Stream class for serial communication
@@ -42,8 +46,6 @@ public:
     volatile uint16_t _tail;
 };
 #endif
-
-
 // Only visible for C++
 
 #ifdef __cplusplus

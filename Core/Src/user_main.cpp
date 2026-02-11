@@ -32,8 +32,8 @@ SPL06 BaroSensor(&BaroWire);
 void setupBaroSensor();  
 void baroProcessingTask(uint32_t millis_now);
 void baroSerialDisplayTask(uint32_t millis_now);
-void telemetrySendBaroAltitude(float altitude, float verticalspd);
-
+void telemetrySendBaroAltitude(float altitude);
+void telemetrySendVario( float verticalspd);
 
 
 //user_loop tasks - timed - prototype declarations
@@ -42,7 +42,7 @@ static void pwm_update_task(uint32_t actual_millis);
 static void LED_and_debugSerial_task(uint32_t actual_millis);
 static void analog_measurement_task(uint32_t actual_millis);
 static void telemetry_transmission_task(uint32_t actual_millis);
-void telemetrySendVario( float verticalspd);
+
 
 static void error_handling_task(void); 
 
@@ -162,7 +162,6 @@ static void CRSF_reception_watchdog_task(uint32_t actual_millis) {
 }
 
 static void telemetry_transmission_task(uint32_t actual_millis) {
-
   static uint32_t last_telemetry_millis = 0;
   static uint32_t telemetry_carousel = 0;
   #define CAROUSEL_MAX 4
@@ -172,7 +171,7 @@ static void telemetry_transmission_task(uint32_t actual_millis) {
   if(bat_current<0.0f) bat_current=0.0f;
   if (telemetry_carousel ==0)   sendCellVoltage(1, bat_voltage);
   if (telemetry_carousel ==1)   sendCellVoltage(2, bat_current);
-  if (telemetry_carousel ==2)   telemetrySendBaroAltitude(filt_alt_AGL, filt_vario);
+  if (telemetry_carousel ==2)   telemetrySendBaroAltitude(filt_alt_AGL);
   if (telemetry_carousel ==3)   telemetrySendVario( filt_vario);
   last_telemetry_millis = actual_millis;
   telemetry_carousel++;
@@ -275,7 +274,7 @@ void setupBaroSensor(){   // SPL06-001 sensor version
 }
 
 
-void telemetrySendBaroAltitude(float altitude, float verticalspd)
+void telemetrySendBaroAltitude(float altitude)
 {
   crsf_sensor_baro_altitude_t crsfBaroAltitude = { 0 , 0 };
 
@@ -309,8 +308,8 @@ void floatToString( char* buffer, size_t bufferSize,float value) {
    int32_t intValue = (int32_t)(value * 100.0 + 0.5); // Scale to preserve two decimal places
    if (intValue > 999999) intValue = 999999; // Cap to max displayable value
    if (intValue < -99999) intValue = -99999; // Cap to min displayable value
-   if(intValue < 0)     snprintf(buffer, bufferSize, "%06d", intValue);
-   else   snprintf(buffer, bufferSize, "%6d", intValue);
+   if(intValue < 0)     snprintf(buffer, bufferSize, "%06ld", (long int)intValue);
+   else                 snprintf(buffer, bufferSize, "%6ld" , (long int)intValue);
     buffer[7] = '\0'; // Ensure null termination
     buffer[6] = buffer[5]; // Move last digit to position 6
     buffer[5] = buffer[4]; // Move second last digit to position 5
