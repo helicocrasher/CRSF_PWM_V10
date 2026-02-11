@@ -1,6 +1,7 @@
 #include "user_main.h"
 #include <cstddef>
 #include <cstdint>
+#include <stdint.h>
 #include <stdio.h>
 #include "../../AlfredoCRSF/src/AlfredoCRSF.h"
 #include "platform_abstraction.h"
@@ -41,6 +42,7 @@ static void pwm_update_task(uint32_t actual_millis);
 static void LED_and_debugSerial_task(uint32_t actual_millis);
 static void analog_measurement_task(uint32_t actual_millis);
 static void telemetry_transmission_task(uint32_t actual_millis);
+void telemetrySendVario( float verticalspd);
 
 static void error_handling_task(void); 
 
@@ -61,13 +63,14 @@ volatile uint32_t RX1_overrun = 0, crsfSerialRestartRX_counter=0, main_loop_cnt=
 volatile uint32_t ELRS_TX_count = 0, ADC_count=0;
 volatile uint16_t ADC_buffer[2]; // ADC buffer for DMA
 volatile uint8_t isADCFinished=0;
+volatile uint8_t i2cWriteComplete=1;
 static float bat_voltage=0.0f, bat_current=0.0f;
 
 static const float IIR_ALPHA  = 0.135755f;  // 0.5Hz cut off (fc/40 / fc=Hz /Tc=320ms)
 static const float IIR_BETA  = (1.0f - IIR_ALPHA);
 
 static float GND_altitude=0;
-static float previous_alt_ASL=0;
+static float previous_alt_ASL=0, baroAltitude=0, baroTemperature=0, baroPressure=0;
 static float vario=0,filt_alt_AGL=0;
 static double filt_vario=0, filt_alt_ASL=0;
 static uint32_t GND_alt_count=0;
@@ -107,7 +110,7 @@ void user_loop_step(void) // same as the "arduino loop()" function
   LED_and_debugSerial_task(actual_millis);
   analog_measurement_task(actual_millis);
   baroProcessingTask(actual_millis);
-//  baroSerialDisplayTask(actual_millis);
+  baroSerialDisplayTask(actual_millis);
   telemetry_transmission_task(actual_millis);
   error_handling_task();
   main_loop_cnt++;
@@ -148,7 +151,7 @@ static void CRSF_reception_task(void) {
 */
 
 static void CRSF_reception_watchdog_task(uint32_t actual_millis) {
-  // Placeholder for future CRSF reception watchdog tasks  
+
   static  uint32_t last_watchdog_millis = 0;
   if (crsf.isLinkUp()) {last_watchdog_millis = actual_millis;  return; } // Link is up, reset watchdog timer - nothing to do
   if (actual_millis-last_watchdog_millis <10) return; // Wait for 10ms of no link or last restart attempt
@@ -159,24 +162,25 @@ static void CRSF_reception_watchdog_task(uint32_t actual_millis) {
 }
 
 static void telemetry_transmission_task(uint32_t actual_millis) {
-  // Placeholder for future telemetry transmission tasks  
+
   static uint32_t last_telemetry_millis = 0;
   static uint32_t telemetry_carousel = 0;
-  #define CAROUSEL_MAX 3
+  #define CAROUSEL_MAX 4
 
-  if (actual_millis - last_telemetry_millis < 250/CAROUSEL_MAX) return;
+  if (actual_millis - last_telemetry_millis < 500/CAROUSEL_MAX) return;
   if(bat_voltage<0.0f) bat_voltage=0.0f;
   if(bat_current<0.0f) bat_current=0.0f;
   if (telemetry_carousel ==0)   sendCellVoltage(1, bat_voltage);
   if (telemetry_carousel ==1)   sendCellVoltage(2, bat_current);
   if (telemetry_carousel ==2)   telemetrySendBaroAltitude(filt_alt_AGL, filt_vario);
+  if (telemetry_carousel ==3)   telemetrySendVario( filt_vario);
   last_telemetry_millis = actual_millis;
   telemetry_carousel++;
   telemetry_carousel %= CAROUSEL_MAX;
 }
 
 static void pwm_update_task(uint32_t actual_millis) {
-  // Placeholder for future PWM update tasks 
+
   static uint32_t servo_update_millis =0; 
   if (actual_millis-servo_update_millis <1) return; // Update every ms to minimize delay between CRSF reception and PWM output
   servo_update_millis = actual_millis;
@@ -187,7 +191,7 @@ static void pwm_update_task(uint32_t actual_millis) {
 }
 
 static void LED_and_debugSerial_task(uint32_t actual_millis) {
-  // Placeholder for future UART communication tasks 
+
   static uint32_t last_debugTerm_millis=0;
   static char debugMSG[StringBufferSize] = {'\0'};
   uint16_t ch1 = crsf.getChannel(1);
@@ -241,7 +245,6 @@ int8_t send_UART2(const char* msg) {
 
 
 void setupBaroSensor(){   // SPL06-001 sensor version 
-  SerialI2Cdebug_println("SPL06-001 test");
   unsigned status;
   BaroWire.begin();
 
@@ -274,7 +277,7 @@ void setupBaroSensor(){   // SPL06-001 sensor version
 
 void telemetrySendBaroAltitude(float altitude, float verticalspd)
 {
-  crsf_sensor_baro_altitude_t crsfBaroAltitude = { 0 };
+  crsf_sensor_baro_altitude_t crsfBaroAltitude = { 0 , 0 };
 
   // Values are MSB first (BigEndian)
   crsfBaroAltitude.altitude = htobe16((uint16_t)(altitude*10.0 + 10000.0));
@@ -283,50 +286,85 @@ void telemetrySendBaroAltitude(float altitude, float verticalspd)
   
   //Supposedly vertical speed can be sent in a BaroAltitude packet, but I cant get this to work.
   //For now I have to send a second vario packet to get vertical speed telemetry to my TX.
+/*
+  crsf_sensor_vario_t crsfVario = { 0 };
+
+  // Values are MSB first (BigEndian)
+  crsfVario.verticalspd = htobe16((int16_t)(verticalspd*100.0));
+  crsf.queuePacket(CRSF_SYNC_BYTE, CRSF_FRAMETYPE_VARIO, &crsfVario, sizeof(crsfVario));
+*/
+}
+
+void telemetrySendVario( float verticalspd)
+{
   crsf_sensor_vario_t crsfVario = { 0 };
 
   // Values are MSB first (BigEndian)
   crsfVario.verticalspd = htobe16((int16_t)(verticalspd*100.0));
   crsf.queuePacket(CRSF_SYNC_BYTE, CRSF_FRAMETYPE_VARIO, &crsfVario, sizeof(crsfVario));
 }
-/*
+
+
+void floatToString( char* buffer, size_t bufferSize,float value) {
+   int32_t intValue = (int32_t)(value * 100.0 + 0.5); // Scale to preserve two decimal places
+   if (intValue > 999999) intValue = 999999; // Cap to max displayable value
+   if (intValue < -99999) intValue = -99999; // Cap to min displayable value
+   if(intValue < 0)     snprintf(buffer, bufferSize, "%06d", intValue);
+   else   snprintf(buffer, bufferSize, "%6d", intValue);
+    buffer[7] = '\0'; // Ensure null termination
+    buffer[6] = buffer[5]; // Move last digit to position 6
+    buffer[5] = buffer[4]; // Move second last digit to position 5
+    buffer[4] = '.'; // Insert decimal point at position 4
+    if(buffer[5] == ' ') buffer[5] = '0'; // Replace space with '0' if needed
+    if(buffer[3] == ' ') buffer[3] = '0'; // Replace space with '0' if needed
+}
+
 
 void baroSerialDisplayTask(uint32_t millis_now){
   static uint32_t last_millis=0;
   if (millis_now - last_millis < 250) return;
   last_millis = millis_now;
-  {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "Temperature = %.2f *C", BaroSensor.readTemperature());
-    SerialI2Cdebug_println(buf);
-    snprintf(buf, sizeof(buf), "Pressure = %.2f Pa", BaroSensor.readPressure());
-    SerialI2Cdebug_println(buf);
-    snprintf(buf, sizeof(buf), "Approx altitude ASL = %.2f m ; Altitude AGL = %.2f m", filt_alt_ASL, filt_alt_AGL);
-    SerialI2Cdebug_println(buf);
-    snprintf(buf, sizeof(buf), "Vario = %.2f m/s", filt_vario);
-    SerialI2Cdebug_println(buf);
-    SerialI2Cdebug_println("");
-  }
+  
+    static char buf[80], BUFF[8];
+
+    floatToString(BUFF, sizeof(BUFF), baroTemperature);
+    snprintf(buf, sizeof(buf), "Temperature = %s*C\n\r", BUFF);
+    send_UART2(buf);
+    delay(3);
+   // snprintf(buf, sizeof(buf), "Pressure = %4dhPa\n\r", (int)baroPressure);
+   // send_UART2(buf);
+    delay(3);
+    floatToString(BUFF, sizeof(BUFF),filt_alt_AGL);
+    snprintf(buf, sizeof(buf), "Approx altitude ASL = %3dm ; Altitude AGL = %sm\n\r", (int)filt_alt_ASL,BUFF );
+    send_UART2(buf); 
+    delay(4); 
+    floatToString(BUFF, sizeof(BUFF), filt_vario);
+    snprintf(buf, sizeof(buf), "Vario = %sm/s\n\r", BUFF);
+    send_UART2(buf);
+     delay(4); 
+    send_UART2("\n\r");
+     delay(1); 
+
+  
 }
-*/
 
 void baroProcessingTask(uint32_t millis_now){
-  float altitude;
+
   static uint32_t last_millis=0,loop_counter=0;
-  if (millis_now - last_millis < 100) return;
+  if (millis_now - last_millis < 125) return;
   last_millis = millis_now;
 
-  #ifdef TARGET_BLUEPILL  // BMP280 sensor
-    altitude = BaroSensor.readAltitude(1013.25); /* Adjusted to local forecast! */
-  #else                   // SPL06-001 sensor
-    altitude = BaroSensor.readPressureAltitudeMeter(1013.25);
-  #endif
+
+  baroAltitude = BaroSensor.readPressureAltitudeMeter(1013.25);
+  baroTemperature = BaroSensor.readTemperature();
+  baroPressure = BaroSensor.readPressure();
+
   if (loop_counter <1000) {    // initialisation --> average ground altitude
-    GND_altitude += altitude;
+    GND_altitude += baroAltitude;
     GND_alt_count++;
-    filt_alt_ASL = altitude;
+    filt_alt_ASL = baroAltitude;
   } else {
-    filt_alt_ASL = (IIR_ALPHA * altitude) + (IIR_BETA * filt_alt_ASL);
+    filt_alt_ASL = (IIR_ALPHA * baroAltitude) + (IIR_BETA * filt_alt_ASL);
   }
   filt_alt_AGL =filt_alt_ASL - (GND_altitude / GND_alt_count);
   vario=(filt_alt_AGL-previous_alt_ASL)*20;

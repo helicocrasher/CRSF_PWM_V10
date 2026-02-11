@@ -13,6 +13,7 @@ long map(long x, long in_min, long in_max, long out_min, long out_max) {
 #include "platform_abstraction.h"
 #include "stm32g031xx.h"
 #include "stm32g0xx_hal_adc.h"
+#include "stm32g0xx_hal_i2c.h"
 #include "stm32g0xx_hal_uart.h"
 #include <cstdint>
 #include <cstring>
@@ -21,8 +22,9 @@ long map(long x, long in_min, long in_max, long out_min, long out_max) {
 // Global pointer for HAL callback
 STM32Stream* g_uartStream = nullptr;
 
-extern UART_HandleTypeDef huart1;
+extern UART_HandleTypeDef huart1, huart2;
 extern ADC_HandleTypeDef hadc1;
+extern I2C_HandleTypeDef hi2c2;
 extern volatile uint32_t RX1_overrun, ELRS_TX_count;
 extern volatile uint8_t ready_RX_UART1;
 extern volatile uint8_t ready_TX_UART1;
@@ -30,6 +32,7 @@ extern volatile uint8_t ready_TX_UART2;
 extern volatile uint8_t ready_RX_UART2; 
 extern volatile uint32_t adcValue, ADC_count;
 extern volatile uint8_t isADCFinished;
+extern volatile uint8_t i2cWriteComplete;
 
 char UART1_TX_Buffer[64];
 
@@ -65,6 +68,14 @@ extern "C" void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         g_uartStream->onRxByte(g_uartStream->_rxBuf[g_uartStream->_head]);
         // Re-arm RX interrupt for next byte
         HAL_UART_Receive_IT(huart, &g_uartStream->_rxBuf[g_uartStream->_head], 1);
+    }
+}
+
+// MasterTxCpltCallback
+extern "C" void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {
+    if (hi2c == &hi2c2) {
+        // Handle I2C transmission complete event
+        i2cWriteComplete = 1;
     }
 }
 /*
@@ -171,4 +182,15 @@ void STM32Stream::onRxByte(uint8_t byte) {
 
 uint32_t platform_millis() {
     return HAL_GetTick();
+}
+
+void Serial2Debug_print(char* msg) {
+    HAL_UART_Transmit(&huart2, (uint8_t*)(msg), strlen(msg), 100);
+}
+
+
+void Serial2Debug_println(char*  msg) { 
+    HAL_UART_Transmit(&huart2, (uint8_t*)(msg), strlen(msg), 100); 
+    const char crlf[] = "\r\n";
+    HAL_UART_Transmit(&huart2, (uint8_t*)crlf, 2, 100); 
 }
