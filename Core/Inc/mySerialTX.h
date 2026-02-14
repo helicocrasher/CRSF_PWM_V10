@@ -2,7 +2,6 @@
 #define MYSERIALTX_H
 
 #include "stm32g0xx_hal.h"
-#include <cstdint>
 
 class mySerialTX {
 public:

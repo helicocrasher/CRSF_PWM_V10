@@ -59,7 +59,7 @@ size_t mySerialTX::write(const uint8_t *input_array, size_t len) {
 }
 
 int8_t mySerialTX::send() {
-    if (!m_huart_TX_ready || !(*m_huart_TX_ready))
+    if (!m_huart_TX_ready || !(*m_huart_TX_ready)) //pointer check and ready check
         return -1;
     size_t available = fifo_data_length();
     if (available == 0)
