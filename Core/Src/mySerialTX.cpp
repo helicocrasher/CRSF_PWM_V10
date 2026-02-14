@@ -18,8 +18,8 @@ void mySerialTX::init(UART_HandleTypeDef *huart, bool *huart_TX_ready, size_t in
     m_fifo_head = m_fifo_tail = 0;
     if (m_fifo) delete[] m_fifo;
     if (m_uart_buffer) delete[] m_uart_buffer;
-    m_fifo = new char[m_fifo_size];
-    m_uart_buffer = new char[m_uart_buffer_size];
+    m_fifo = new uint8_t[m_fifo_size];
+    m_uart_buffer = new uint8_t[m_uart_buffer_size];
 }
 
 size_t mySerialTX::fifo_free_space() const {
@@ -36,18 +36,18 @@ size_t mySerialTX::fifo_data_length() const {
         return m_fifo_size - (m_fifo_tail - m_fifo_head);
 }
 
-void mySerialTX::fifo_push(char c) {
+void mySerialTX::fifo_push(uint8_t c) {
     m_fifo[m_fifo_head] = c;
     m_fifo_head = (m_fifo_head + 1) % m_fifo_size;
 }
 
-char mySerialTX::fifo_pop() {
-    char c = m_fifo[m_fifo_tail];
+uint8_t mySerialTX::fifo_pop() {
+    uint8_t c = m_fifo[m_fifo_tail];
     m_fifo_tail = (m_fifo_tail + 1) % m_fifo_size;
     return c;
 }
 
-size_t mySerialTX::write(const char *input_array, size_t len) {
+size_t mySerialTX::write(const uint8_t *input_array, size_t len) {
     size_t written = 0;
     size_t free_space = fifo_free_space();
     size_t to_write = (len < free_space) ? len : free_space;
@@ -69,7 +69,7 @@ int8_t mySerialTX::send() {
         m_uart_buffer[i] = fifo_pop();
     }
     *m_huart_TX_ready = false;
-    if (HAL_UART_Transmit_IT(m_huart, (uint8_t *)m_uart_buffer, to_send) == HAL_OK) {
+    if (HAL_UART_Transmit_IT(m_huart, m_uart_buffer, to_send) == HAL_OK) {
         return (int8_t)to_send;
     } else {
         // On error, push data back to FIFO (not ideal, but prevents loss)
