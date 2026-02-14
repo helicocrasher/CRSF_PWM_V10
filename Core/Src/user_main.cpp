@@ -55,13 +55,13 @@ static void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_length);
 int8_t send_UART2(void);
 
 extern ADC_HandleTypeDef hadc1;
-//static STM32Stream crsfSerial(&huart1);  // Create STM32Stream object for CRSF communication using UART1
 STM32Stream* crsfSerial = nullptr;  // Will be initialized in user_init()
 AlfredoCRSF crsf;
 volatile uint8_t ready_RX_UART2 = 1;
 volatile bool ready_TX_UART2 = 1;
 volatile uint8_t ready_RX_UART1 = 1;
 volatile bool ready_TX_UART1 = 1;
+volatile bool isCRSFLinkUp = false;
 volatile uint32_t RX1_overrun = 0, crsfSerialRestartRX_counter=0, main_loop_cnt=0, ADC_period=0;
 volatile uint32_t ELRS_TX_count = 0, ADC_count=0;
 volatile uint16_t ADC_buffer[2]; // ADC buffer for DMA
@@ -78,27 +78,11 @@ static float vario=0,filt_alt_AGL=0;
 static double filt_vario=0, filt_alt_ASL=0;
 static uint32_t GND_alt_count=0;
 
-const int RingBufferSize = 256;
-static char RingBuffer[RingBufferSize];
-static uint16_t RingBufferHead = 0;
-static uint16_t RingBufferTail = 0;
-
-/*
-// In your initialization (e.g., user_init()):
-inline void init_crsf() {
-  crsf.begin(*crsfSerial);
-    // Now crsf can be used normally
-}
-*/
 
 void user_init(void)  // same as the "arduino setup()" function
 {
   HAL_Delay(5);
   serial2TX.init(&huart2, (bool*)&ready_TX_UART2, 256, 4  );
-  for (unsigned int i=0; i<256; i++)     RingBuffer[i]=0;
-  for (unsigned int i=0; i<num_PWM_channels; i++){
-    HAL_TIM_PWM_Start(Timer_map[i], PWM_Channelmap[i]);
-  }
   // Ensure UART is initialized before creating STM32Stream
   crsfSerial = new STM32Stream(&huart1);
   crsf.begin(*crsfSerial);
@@ -124,7 +108,6 @@ void user_loop_step(void) // same as the "arduino loop()" function
   baroSerialDisplayTask(actual_millis);
   telemetry_transmission_task(actual_millis);
   error_handling_task();
-  send_UART2();
   serial2TX.send();
   main_loop_cnt++;
   HAL_Delay(2)  ; // Small delay to prevent CPU hogging - adjust as needed for timing
@@ -158,11 +141,6 @@ static void analog_measurement_task(uint32_t actual_millis) {
   bat_current = ((float)adcValue2 * 3.3f / 4095.0f * ADC_GAIN/(float)BAT_ADC_Oversampling_Ratio / SHUNT_RESISTOR_OHMS)-CURRENT_OFFSET; 
 }
 
-/*
-static void CRSF_reception_task(void) {
-  // Placeholder for future CRSF reception tasks  
-}
-*/
 
 static void CRSF_reception_watchdog_task(uint32_t actual_millis) {
 
@@ -175,34 +153,6 @@ static void CRSF_reception_watchdog_task(uint32_t actual_millis) {
   crsfSerialRestartRX_counter++;
 }
 
-
-
-int writeSerialTXFifoBuffer(const uint8_t* data, volatile size_t length) {
-  // Placeholder for future send queue management
-  static volatile size_t spaceInFiFo = 0;
-
-  spaceInFiFo =  RingBufferSize-(((RingBufferHead-RingBufferTail) )%RingBufferSize);
-  if (spaceInFiFo < length) {
-    // Not enough space in the buffer, handle overflow (e.g., discard data or reset buffer)
-    length = spaceInFiFo;
-  }
-  for (size_t i = 0; i < length; i++) {
-    RingBuffer[RingBufferHead] = data[i];
-    RingBufferHead = (RingBufferHead + 1) % RingBufferSize;
-   }
-  return length; // Return the number of bytes written to the buffer
-}
-
-uint8_t pullFromSerialTXFifoBuffer(char* data, volatile size_t length) {
-  // Placeholder for future send queue management
-  size_t bytesRead = 0;
-  while ((bytesRead < length) && ((RingBufferHead - RingBufferTail) != 0)) {
-    data[bytesRead] = RingBuffer[RingBufferTail];
-    RingBufferTail = (RingBufferTail + 1) % RingBufferSize;
-    bytesRead++;
-  }
-  return bytesRead; // Return the number of bytes read from the buffer
-}
 
 static void telemetry_transmission_task(uint32_t actual_millis) {
   static uint32_t last_telemetry_millis = 0;
@@ -223,6 +173,14 @@ static void telemetry_transmission_task(uint32_t actual_millis) {
 
 static void pwm_update_task(uint32_t actual_millis) {
 
+  if (!isCRSFLinkUp && crsf.isLinkUp()) { // Link just came up - initialize PWM outputs
+    isCRSFLinkUp = true;
+    for (uint8_t channel=0; channel<num_PWM_channels; channel++){
+//      user_pwm_setvalue(channel, 1500); // Set all channels to neutral on link up
+      HAL_TIM_PWM_Start(Timer_map[channel], PWM_Channelmap[channel]);
+    }
+    return;
+  }
   static uint32_t servo_update_millis =0; 
   if (actual_millis-servo_update_millis <1) return; // Update every ms to minimize delay between CRSF reception and PWM output
   servo_update_millis = actual_millis;
@@ -273,23 +231,6 @@ static void user_pwm_setvalue(uint8_t pwm_channel, uint16_t PWM_pulse_length) {
   HAL_TIM_PWM_ConfigChannel(Timer_map[pwm_channel], &sConfigOC, PWM_Channelmap[pwm_channel]);
 }
 
-int8_t send_UART2(void) { 
-  const unsigned int UART2BufferSize = 4;
-  static char  UART2Buffer[UART2BufferSize]={"0"};
-  static size_t msg_len = 0;
-
-  if (ready_TX_UART2 == 0) return -1; // Previous transmission still in progress
-  msg_len = pullFromSerialTXFifoBuffer((char*)UART2Buffer, UART2BufferSize);
-  if (msg_len > UART2BufferSize) {
-    msg_len = UART2BufferSize; // Limit the message length to prevent overflow
-  }
-  if (msg_len > 0) {
-    ready_TX_UART2 = 0; 
-  HAL_UART_Transmit_IT(&huart2, (uint8_t*)UART2Buffer, (uint16_t)msg_len);
-  }
-  return msg_len;
-}
-
 
 void setupBaroSensor(){   // SPL06-001 sensor version 
   unsigned status;
@@ -335,15 +276,6 @@ void telemetrySendBaroAltitude(float altitude)
   //crsfBaroAltitude.verticalspd = htobe16((int16_t)(verticalspd*100.0)); //TODO: fix verticalspd in BaroAlt packets
   crsf.queuePacket(CRSF_SYNC_BYTE, CRSF_FRAMETYPE_BARO_ALTITUDE, &crsfBaroAltitude, sizeof(crsfBaroAltitude) - 2);
   
-  //Supposedly vertical speed can be sent in a BaroAltitude packet, but I cant get this to work.
-  //For now I have to send a second vario packet to get vertical speed telemetry to my TX.
-/*
-  crsf_sensor_vario_t crsfVario = { 0 };
-
-  // Values are MSB first (BigEndian)
-  crsfVario.verticalspd = htobe16((int16_t)(verticalspd*100.0));
-  crsf.queuePacket(CRSF_SYNC_BYTE, CRSF_FRAMETYPE_VARIO, &crsfVario, sizeof(crsfVario));
-*/
 }
 
 void telemetrySendVario( float verticalspd)
@@ -376,27 +308,23 @@ void baroSerialDisplayTask(uint32_t millis_now){
   if (millis_now - last_millis < 250) return;
   last_millis = millis_now;
   
-    static char float_string_buffer[8];
+  static char float_string_buffer[8];
 
-    floatToString(float_string_buffer, sizeof(float_string_buffer), baroTemperature);
-    snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Temperature = %s*C\n\r", float_string_buffer);
-//    writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
+  floatToString(float_string_buffer, sizeof(float_string_buffer), baroTemperature);
+  snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Temperature = %s*C\n\r", float_string_buffer);
   serial2TX.write((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
-   // snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Pressure = %4dhPa\n\r", (int)baroPressure);
-   // writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
-    floatToString(float_string_buffer, sizeof(float_string_buffer),filt_alt_AGL);
-    snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Approx altitude ASL = %3dm ; Altitude AGL = %sm\n\r", (int)filt_alt_ASL,float_string_buffer); 
-    //writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
+  // snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Pressure = %4dhPa\n\r", (int)baroPressure);
+  // writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
+  floatToString(float_string_buffer, sizeof(float_string_buffer),filt_alt_AGL);
+  snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Approx altitude ASL = %3dm ; Altitude AGL = %sm\n\r", (int)filt_alt_ASL,float_string_buffer); 
+  //writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
   serial2TX.write((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
-    floatToString(float_string_buffer, sizeof(float_string_buffer), filt_vario);
-    snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Vario = %sm/s\n\r", float_string_buffer);
-//    writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
+  floatToString(float_string_buffer, sizeof(float_string_buffer), filt_vario);
+  snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Vario = %sm/s\n\r", float_string_buffer);
+  //writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
   serial2TX.write((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
-    //writeSerialTXFifoBuffer((uint8_t*)"\n\r", 2);
+  //writeSerialTXFifoBuffer((uint8_t*)"\n\r", 2);
   serial2TX.write((uint8_t*)"\n\r", 2);
-
-
-  
 }
 
 void baroProcessingTask(uint32_t millis_now){
@@ -428,7 +356,7 @@ void baroProcessingTask(uint32_t millis_now){
   millis_end=HAL_GetTick();
   volatile uint32_t baro_processing_millis = millis_end - millis_start; // For debugging - check how long baro processing takes and if it causes delays in PWM output or CRSF reception
   snprintf(debug_str_buffer, sizeof(debug_str_buffer), "Baro processing time: %lu ms\n\r", (unsigned long)baro_processing_millis);
-//  writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
+  //writeSerialTXFifoBuffer((uint8_t*)debug_str_buffer, strlen(debug_str_buffer));
   serial2TX.write((uint8_t*)debug_str_buffer, strlen(debug_str_buffer)); // Send baro processing time to UART2 for debugging
 }
 
