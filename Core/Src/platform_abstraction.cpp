@@ -183,14 +183,17 @@ void STM32Stream::onRxByte(uint8_t byte) {
 uint32_t platform_millis() {
     return HAL_GetTick();
 }
+/*
 
 void Serial2Debug_print(char* msg) {
-    HAL_UART_Transmit(&huart2, (uint8_t*)(msg), strlen(msg), 100);
+    //HAL_UART_Transmit(&huart2, (uint8_t*)(msg), strlen(msg), 100);
 }
-
+*/
+/*
 
 void Serial2Debug_println(char*  msg) { 
-    HAL_UART_Transmit(&huart2, (uint8_t*)(msg), strlen(msg), 100); 
+    // HAL_UART_Transmit(&huart2, (uint8_t*)(msg), strlen(msg), 100); 
     const char crlf[] = "\r\n";
-    HAL_UART_Transmit(&huart2, (uint8_t*)crlf, 2, 100); 
+    //HAL_UART_Transmit(&huart2, (uint8_t*)crlf, 2, 100); 
 }
+*/
