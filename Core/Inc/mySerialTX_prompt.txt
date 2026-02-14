@@ -1,0 +1,13 @@
+write me a non blocking mySerialTX class
+for the STM32 HAL 
+it should use the HAL_UART_Transmit_IT
+contain an internal fifo buffer that does not overrun and is filled by copy data from input_array.
+the fifo output is triggered by the send member function 
+Member funtions 
+- size_t length_written write(uint8_t* input_array, size_t len)
+- init(&huart, bool* &huart_tX_ready, input_fifo_buffer_size=256, UART_buffer_size=4)
+- int8_t sent send() 
+-- that returns the number of bytes transferred to HAL_UART_Transmit_IT (&huart,..) max output_buffer_size
+-- or returns -1 when &huart_TX_ready == false
+
+Put the code in a new .h file and a new .cpp file 
