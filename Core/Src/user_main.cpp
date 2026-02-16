@@ -13,6 +13,7 @@
 #include "../../SPL06-001/SPL06-001.h"
 #include "../../SPL06-001/spl06_001_glue.h" // For SerialI2CDebug macros
 #include "mySerialTX.h"
+#include "myHalfSerial_X.h"
 
 #define CRSF_BATTERY_SENSOR_CELLS_MAX 12
 #define BAT_ADC_Oversampling_Ratio 16  // Must match ADC oversampling ratio
@@ -31,7 +32,8 @@ extern "C" {
 #define TARGET_MATEKSYS_CRSF_PWM_V10
 TwoWire BaroWire(SDA2, SCL2);	
 SPL06 BaroSensor(&BaroWire); 
-mySerialTX serial2TX;
+myHalfSerial_X serial2TX;
+//mySerialTX serial2TX;
 void setupBaroSensor();  
 void baroProcessingTask(uint32_t millis_now);
 void baroSerialDisplayTask(uint32_t millis_now);
@@ -82,7 +84,7 @@ static uint32_t GND_alt_count=0;
 void user_init(void)  // same as the "arduino setup()" function
 {
   HAL_Delay(5);
-  serial2TX.init(&huart2, (bool*)&ready_TX_UART2, 256, 4  );
+  serial2TX.init(&huart2, (bool*)&ready_TX_UART2, true,256, 4  );
   // Ensure UART is initialized before creating STM32Stream
   crsfSerial = new STM32Stream(&huart1);
   crsf.begin(*crsfSerial);
@@ -108,10 +110,9 @@ void user_loop_step(void) // same as the "arduino loop()" function
   baroSerialDisplayTask(actual_millis);
   telemetry_transmission_task(actual_millis);
   error_handling_task();
-  serial2TX.send();
+  serial2TX.updateSerial();
   main_loop_cnt++;
   HAL_Delay(2)  ; // Small delay to prevent CPU hogging - adjust as needed for timing
-
 }
 
 
